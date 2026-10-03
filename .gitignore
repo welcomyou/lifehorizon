@@ -1,0 +1,46 @@
+# ============================================================================
+# GITIGNORE — LifeHorizon
+# Nguyên tắc: DỮ LIỆU CÁ NHÂN KHÔNG BAO GIỜ vào repo. Repo sẽ nối Cloudflare
+# Pages (public URL), nên mọi hồ sơ/ảnh chụp/đối chứng sinh từ hồ sơ thật
+# đều phải nằm ngoài git. File này viết lại ngày 03/10/2026 (bản cũ thiếu
+# profiles/ — lỗ hổng nghiêm trọng).
+# ============================================================================
+
+# ---- DỮ LIỆU CÁ NHÂN: hồ sơ người dùng thật (JSON tài chính cá nhân) ----
+profiles/
+
+# ---- audit/: chỉ giữ đúng file golden hiện hành cho `npm run golden` ----
+# (golden-v11 là số mô phỏng sinh từ fixture giả lập, không phải dữ liệu thật;
+#  mọi thứ khác trong audit/ — bản sao hồ sơ nghiệm thu, ảnh chụp màn hình số
+#  tiền thật, báo cáo phân tích — đều KHÔNG đưa lên repo)
+audit/*
+!audit/2026-10-03-cost-aware-rebalance/
+audit/2026-10-03-cost-aware-rebalance/*
+!audit/2026-10-03-cost-aware-rebalance/golden-v11.json
+
+# ---- Sao lưu dự án cũ (chứa snapshot hồ sơ + docs thời điểm) ----
+backups/
+
+# ---- Kết quả probe/đối chứng SINH TỰ ĐỘNG từ hồ sơ chính (chạy lại là có) ----
+app/test/audit-nav-results.jsonl
+app/test/audit-input-results.json
+app/test/audit-return-results.json
+app/test/model-diagnostics.json
+
+# ---- Tài liệu phát triển nội bộ (AGENTS.md/docs chứa số liệu phân tích hồ sơ
+#      chính THẬT) — KHÔNG đưa lên repo public; vẫn giữ nguyên trên máy ----
+AGENTS.md
+docs/
+
+# ---- Cấu hình công cụ AI/dev cục bộ ----
+.zcode/
+
+# ---- Rác tạm, build, hệ điều hành ----
+node_modules/
+_tmp*
+_testout*
+*.log
+Thumbs.db
+Desktop.ini
+$null
+-p

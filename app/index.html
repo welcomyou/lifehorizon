@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LifeHorizon - Dòng tiền cuộc đời</title>
+<style>
+  :root{
+    --bg:#f4f6fa; --card:#fff; --ink:#1e293b; --muted:#64748b; --line:#e2e8f0;
+    --blue:#2563eb; --blue2:#60a5fa; --green:#059669; --purple:#7c3aed; --amber:#d97706;
+    --gold:#b45309; --red:#dc2626; --gray:#94a3b8;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{font-family:'Segoe UI',system-ui,Arial,sans-serif; background:var(--bg); color:var(--ink); font-size:14px;}
+  header{background:linear-gradient(135deg,#1e3a8a,#2563eb); color:#fff; padding:16px 28px;}
+  header h1{font-size:19px;} header p{font-size:12px; opacity:.85; margin-top:2px;}
+  nav{display:flex; gap:4px; background:#fff; border-bottom:1px solid var(--line); padding:0 20px; position:sticky; top:0; z-index:10;}
+  nav button{border:none; background:none; padding:11px 16px; font-size:13.5px; color:var(--muted); cursor:pointer; border-bottom:3px solid transparent; font-weight:600; position:relative;}
+  nav button.active{color:var(--blue); border-bottom-color:var(--blue);}
+  .ebadge{position:absolute; top:3px; right:0; background:var(--red); color:#fff; border-radius:999px; font-size:10px; font-weight:700; min-width:16px; height:16px; line-height:16px; text-align:center; padding:0 4px;}
+  main{max-width:none; margin:0; padding:16px 22px;}   /* full-width: sát rìa màn hình, không kẹp 1180px giữa trang */
+  .tab{display:none;} .tab.active{display:block;}
+  .grid2{display:grid; grid-template-columns:minmax(330px,420px) minmax(0,1fr); gap:14px; align-items:start;}
+  .grid2e{display:grid; grid-template-columns:1fr 1fr; gap:14px; align-items:start;}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:14px;}
+  .card h3{font-size:13px; margin-bottom:10px; color:var(--blue); text-transform:uppercase; letter-spacing:.4px;}
+  label{display:block; font-size:11.5px; color:var(--muted); margin:7px 0 2px; font-weight:600;}
+  input, select{width:100%; padding:6px 8px; border:1px solid var(--line); border-radius:8px; font-size:13px; background:#fff;}
+  input:focus, select:focus{outline:2px solid var(--blue2); border-color:var(--blue);}
+  input.money{text-align:right; font-variant-numeric:tabular-nums;}
+  input.money.bad{border-color:var(--red); background:#fef2f2; outline:2px solid #fecaca;}
+  .tabMsg:empty{display:none;} .tabMsg{margin-bottom:2px;}
+  .segbtns{display:flex; gap:6px; margin-bottom:10px;}
+  .pseg{flex:1; border:1px solid var(--line); background:#fff; border-radius:8px; padding:6px 4px; font-size:12px; font-weight:600; color:var(--muted); cursor:pointer;}
+  .pseg.active{background:#eef2ff; color:var(--blue); border-color:var(--blue2);}
+  .row{display:flex; gap:8px; align-items:flex-end;} .row>*{flex:1;}   /* ô nhập căn đáy thẳng hàng khi nhãn dài bị wrap */
+  .hint{font-size:11px; color:var(--muted); margin-top:4px;}
+  .btn{display:inline-block; background:var(--blue); color:#fff; border:none; border-radius:8px; padding:8px 14px; font-size:13px; font-weight:600; cursor:pointer; margin-top:8px;}
+  .btn:hover{background:#1d4ed8;}
+  .btn.ghost{background:#eef2ff; color:var(--blue);}
+  .btn.danger{background:#dc2626;}
+  .btn.danger:hover{background:#b91c1c;}
+  .btn.mini{padding:4px 10px; font-size:12px; margin-top:0;}
+  .kpi{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px;}
+  .kpi .t{font-size:11px; color:var(--muted); font-weight:600; text-transform:uppercase;}
+  .kpi .v{font-size:20px; font-weight:750; margin-top:4px;}
+  .kpi .s{font-size:11px; color:var(--muted); margin-top:3px;}
+  .gridk{display:grid; grid-template-columns:repeat(3,1fr); gap:10px;}
+  #yearTable{min-width:900px;}
+  #yearTable th:last-child,#yearTable td.year-plan-cell{text-align:left;min-width:210px;white-space:normal;}
+  .year-plan-cell{font-size:12px;color:#475569;}
+  .year-toggle{display:inline-flex;align-items:center;gap:5px;padding:4px;border:0;border-radius:5px;background:transparent;color:#1d4ed8;font:inherit;font-weight:700;cursor:pointer;white-space:nowrap;}
+  .year-toggle:hover,.year-toggle:focus-visible{background:#eff6ff;}
+  .year-caret{display:inline-block;min-width:12px;font-size:14px;line-height:1;}
+  .year-plan-detail td{text-align:left;white-space:normal;background:#f8fafc;padding:10px;}
+  .year-month-list{display:grid;gap:8px;position:sticky;left:0;width:min(100%,calc(100vw - 70px));}
+  .year-month{display:grid;grid-template-columns:105px minmax(0,1fr);gap:12px;border:1px solid var(--line);border-radius:8px;padding:9px;background:#fff;}
+  .year-month>strong{font-size:12px;color:#1e3a8a;}
+  .year-month ol{margin:0;padding-left:18px;line-height:1.5;font-size:12px;}
+  .year-month li{margin:0 0 3px;}
+  .year-month .month-end{font-size:12px;color:#475569;margin-top:5px;}
+  @media(max-width:760px){.year-month{grid-template-columns:1fr;gap:4px;}}
+  /* Tab 3 — chỉ ba thông tin hưu cần cho người dùng; chữ kiểu câu. */
+  #pensionLawCol{padding:20px; line-height:1.55;}
+  #pensionLawCol h3{text-transform:none; letter-spacing:0; color:var(--ink); font-size:18px; margin-bottom:16px; display:flex; align-items:center; flex-wrap:wrap; gap:10px;}
+  /* Đ36 — khối BHXH dời vào cột phải dưới card "Lương hưu": 3 ô tự xuống dòng theo bề rộng cột
+     (cột hẹp ~400px thì xếp dọc, rộng thì ngang 3 ô) thay vì cố định 3 cột. */
+  #useGrid{display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:14px;}
+  #pensionLawCol .pension-result{min-width:0; border:1px solid var(--line); border-radius:12px; padding:16px; background:#f8fafc;}
+  #pensionLawCol .pension-result.primary{background:#f0fdfa; border-color:#99d9cb;}
+  #pensionLawCol h4{font-size:14px; font-weight:650; color:var(--ink);}
+  #pensionLawCol .pension-value{font-size:28px; line-height:1.3; font-weight:750; font-variant-numeric:tabular-nums; margin:8px 0;}
+  #pensionLawCol .primary .pension-value{color:#0f766e;}
+  #pensionLawCol .pension-unit{font-size:14px; font-weight:500; color:var(--muted); white-space:nowrap;}
+  #pensionLawCol .pension-meta{font-size:12px; color:#475569;}
+  #pensionLawCol .pension-notice{border-left:3px solid #d6b05b; padding:8px 12px; margin-top:12px; background:#fffbeb; color:#78551b; font-size:12px;}
+  @media(max-width:760px){
+    #pensionLawCol{padding:16px;}
+    #pensionLawCol #useGrid{grid-template-columns:1fr; gap:12px;}
+    #pensionLawCol .pension-value{font-size:26px;}
+  }
+  .plist .period{display:grid; grid-template-columns:22px minmax(86px,.9fr) minmax(86px,.9fr) minmax(52px,.5fr) minmax(110px,1.2fr) minmax(126px,1.4fr) minmax(60px,.7fr) 30px; gap:6px; align-items:end; padding:9px 8px; border:1px solid var(--line); border-radius:10px; margin-bottom:7px; background:#fbfdff;}
+  .plist .period.head{background:#f1f5f9; border:none; padding:0 8px 4px; font-size:10.5px; color:var(--muted); font-weight:700; text-transform:uppercase; align-items:center;}
+  .handle{cursor:grab; color:#94a3b8; font-size:16px; text-align:center; user-select:none;}
+  .period.dragging{opacity:.4;}
+  .del{border:none; background:#fee2e2; color:#b91c1c; border-radius:7px; padding:0 8px; cursor:pointer; font:inherit; font-size:12px; height:24px; min-width:28px; display:inline-flex; align-items:center; justify-content:center; line-height:24px;}
+  .del:disabled{background:transparent; color:#64748b; cursor:default; font-size:14px;}
+  .pension-milestone .lockcell{display:flex; align-items:center; justify-content:center; font-size:14px; line-height:24px; min-height:24px;}
+  .warnbar{background:#fef3c7; border:1px solid #f59e0b; color:#92400e; border-radius:10px; padding:9px 12px; font-size:12.5px; margin-bottom:8px; display:flex; align-items:center; gap:10px;}
+  /* Tab 5 — giai đoạn thu nhập MỘT DÒNG kiểu Tab 3: Từ năm · Đến năm · Thu nhập/tháng · Tăng%/năm · ✕
+     (đợt 14 đã bỏ cột phân bổ — tiền dư/thiếu do chiến lược đầu tư Tab 6 xử lý) */
+  .incrow{display:grid; grid-template-columns:minmax(72px,1fr) minmax(72px,1fr) minmax(116px,2fr) minmax(94px,1fr) 30px; gap:6px; align-items:end; padding:8px; border:1px solid var(--line); border-radius:10px; margin-bottom:7px; background:#fbfdff;}
+  .incrow.head{background:#f1f5f9; border:none; padding:0 8px 4px; font-size:10.5px; color:var(--muted); font-weight:700; text-transform:uppercase; align-items:center;}
+  .lrow{display:grid; grid-template-columns:minmax(130px,1.6fr) minmax(76px,.8fr) minmax(140px,1.2fr) minmax(170px,1.5fr) 30px; gap:6px; align-items:end; padding:8px; border:1px solid var(--line); border-radius:10px; margin-bottom:6px; background:#fbfdff;}
+  .lrow.head{background:#f1f5f9; border:none; padding:0 8px 4px; font-size:10.5px; color:var(--muted); font-weight:700; text-transform:uppercase; align-items:center;}
+  .pchk{display:flex; align-items:center; gap:5px; font-size:12px; color:var(--ink); font-weight:600; margin:0 0 6px;}
+  .pchk input{width:auto;}
+  .erow{display:grid; grid-template-columns:minmax(60px,.7fr) minmax(110px,1.6fr) minmax(128px,1.4fr) 30px; gap:6px; align-items:end; padding:8px; border:1px solid var(--line); border-radius:10px; margin-bottom:6px; background:#fbfdff;}
+  .erow.head{background:#f1f5f9; border:none; padding:0 8px 4px; font-size:10.5px; color:var(--muted); font-weight:700; text-transform:uppercase; align-items:center;}
+  /* Mốc chi Tab 4 — riêng .erow: cột tiền CỐ ĐỊNH vừa số 1.000.000.000 (không giãn theo bề rộng card),
+     thêm cột Năm chỉ đọc bên cạnh Năm thứ. Sự kiện chi/thu vẫn dùng .erow như cũ. */
+  .msrow{display:grid; grid-template-columns:minmax(56px,.5fr) minmax(48px,.4fr) minmax(110px,1.5fr) 124px 30px; gap:6px; align-items:end; padding:8px; border:1px solid var(--line); border-radius:10px; margin-bottom:6px; background:#fbfdff;}
+  .msrow.head{background:#f1f5f9; border:none; padding:0 8px 4px; font-size:10.5px; color:var(--muted); font-weight:700; text-transform:uppercase; align-items:center;}
+  .msrow .cyear{font-size:13px; font-weight:700; color:var(--ink); padding:6px 2px; font-variant-numeric:tabular-nums; white-space:nowrap;}
+  .tl{position:relative; height:80px; margin-top:12px;}
+  .tl .bar{position:absolute; top:24px; left:0; right:0; height:16px; background:#eef2f7; border-radius:8px; overflow:hidden;}
+  .tl .seg{position:absolute; top:0; height:16px; opacity:.9;}
+  .tl .flag{position:absolute; top:-2px; font-size:10px; color:var(--muted); transform:translateX(-50%); white-space:nowrap;}
+  .tl .mark{position:absolute; top:20px; width:2px; height:24px; background:var(--green); transform:translateX(-50%);}
+  .tl .mark.now{background:var(--red);}
+  .tl .nowflag{position:absolute; top:44px; transform:translateX(-50%); white-space:nowrap; text-align:center; font-size:10px; font-weight:700; color:var(--red); line-height:1;}
+  .tl .nowflag .tri{display:block; font-size:9px; line-height:1; margin-bottom:2px;}
+  .tl .scale{position:absolute; top:68px; left:0; right:0; height:10px; font-size:10px; color:var(--muted);}
+  .tl .scale span{position:absolute; transform:translateX(-50%);}
+  .tl .scale span.s0{left:0; transform:none;}
+  .tl .scale span.s1{left:auto; right:0; transform:none;}
+  table{border-collapse:collapse; width:100%; font-size:12px;}
+  th{position:sticky; top:0; background:#f1f5f9; text-align:right; padding:6px 7px; border-bottom:1px solid var(--line); white-space:nowrap;}
+  th:first-child, td:first-child{text-align:left;}
+  td{text-align:right; padding:4px 7px; border-bottom:1px solid #f1f5f9; white-space:nowrap;}
+  tr.bad td{background:#fef2f2;}
+  .scroll{max-height:420px; overflow:auto; border:1px solid var(--line); border-radius:10px;}
+  .legend{display:flex; flex-wrap:wrap; gap:9px; font-size:11px; color:var(--muted); margin-top:5px;}
+  .legend i{display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:4px; vertical-align:-1px;}
+  .bigmsg{font-size:13.5px; font-weight:650; padding:10px 12px; border-radius:10px; margin-top:10px;}
+  .ok{background:#ecfdf5; color:#065f46;} .warn{background:#fef2f2; color:#991b1b;}
+  .foot{font-size:11px; color:var(--muted); padding:12px 6px; border-top:1px dashed var(--line); margin-top:14px;}
+  .schart{border:1px solid var(--line); border-radius:10px; padding:10px; margin-bottom:12px; background:#fbfdff;}
+  .schart .top{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:6px;}
+  .schart .top b{font-size:13px;}
+  .schart .top label{display:flex; align-items:center; gap:4px; margin:0; font-size:11px;}
+  .schart .top input{width:58px; padding:3px 5px; font-size:12px;}
+  .badge{font-size:11px; background:#eef2ff; color:#1e40af; border-radius:999px; padding:3px 10px; font-weight:600;}
+  .badge.live{background:#fef3c7; color:#92400e; min-width:120px; text-align:center;}
+/* Đ2 (11/09) — chip trạng thái nguồn mức hưu + chip người đang xem ở Tab 3 */
+.badge.src-auto{background:#ccfbf1; color:#0f766e;}
+.badge.src-manual{background:#f1f5f9; color:#475569;}
+.badge.src-empty{background:#f8fafc; color:#94a3b8;}
+.badge.src-warn{background:#fee2e2; color:#b91c1c;}
+  .badge.pchip{background:#e0f2f1; color:#0f766e; text-transform:none; letter-spacing:0;}
+/* Đ36 — Tab 3: lưới riêng — giai đoạn đóng BÊN TRÁI (7 cột mỗi dòng cần ~600px); cột PHẢI gồm ô
+   "Lương hưu" + khối "Bảo hiểm xã hội" ngay dưới (đợt 36 dời lên khỏi cuối tab). Hàng .kv = nhãn
+   trái … giá trị phải (căn hai bên) cho khối quy đổi 5 dòng & tổng hợp gia đình. */
+  .gridp{display:grid; grid-template-columns:minmax(640px,1.2fr) minmax(360px,1fr); gap:14px; align-items:start;}
+  .kv{display:flex; justify-content:space-between; align-items:baseline; gap:14px; padding:2.5px 0; font-size:12.5px;}
+  .kv .k{color:var(--muted);}
+  .kv b{white-space:nowrap; font-variant-numeric:tabular-nums;}
+  .svgbox{position:relative;}
+  .svgbox svg{width:100%; height:auto; display:block; touch-action:none; user-select:none;}
+  .tt{position:absolute; z-index:20; display:none; pointer-events:none; background:#fff; border:1px solid var(--line); border-radius:8px; box-shadow:0 6px 18px rgba(15,23,42,.14); padding:7px 10px; font-size:11.5px; min-width:205px; max-width:min(360px,calc(100% - 16px));}
+  .tt .th{font-weight:700; font-size:12px; margin-bottom:5px;}
+  .tt .tr{display:flex; justify-content:space-between; gap:14px; line-height:1.6;}
+  .tt .tr b{min-width:0; overflow-wrap:anywhere; text-align:right;}
+  .tt .trade-parts{margin:0 0 4px 15px; color:#64748b; line-height:1.45;}
+  .tt .tr i{display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:6px; vertical-align:-1px;}
+  .pt{cursor:ns-resize;}
+  /* ===== Dialog của app — thay alert/confirm mặc định của trình duyệt ===== */
+  .mmask{position:fixed; left:0; top:0; right:0; bottom:0; background:rgba(15,23,42,.45); display:none; z-index:100; align-items:center; justify-content:center; padding:20px;}
+  .mmask.show{display:flex;}
+  .modal{background:#fff; border-radius:14px; box-shadow:0 20px 50px rgba(15,23,42,.25); max-width:460px; width:100%; padding:18px 20px 16px; animation:mpop .14s ease-out;}
+  @keyframes mpop{from{transform:translateY(8px) scale(.98); opacity:0;} to{transform:none; opacity:1;}}
+  .modal h4{font-size:15px; margin-bottom:8px; color:var(--ink);}
+  .modal .mbody{font-size:13px; color:#334155; line-height:1.55;}
+  .modal .mbtns{display:flex; gap:8px; justify-content:flex-end; margin-top:16px;}
+  .modal .mbtns button{border:none; border-radius:8px; padding:8px 16px; font-size:13px; font-weight:600; cursor:pointer;}
+  .modal .mok{background:var(--blue); color:#fff;} .modal .mok:hover{background:#1d4ed8;}
+  .modal .mcancel{background:#f1f5f9; color:var(--ink);} .modal .mcancel:hover{background:#e2e8f0;}
+  /* Đ30 — dialog rộng (Quản lý hồ sơ): chiếm tối đa màn hình ở cả hai chiều, tiêu đề/nút chốt cố định,
+     thân cuộn riêng; bảng không còn tràn ngang như khi nhốt trong max-width 460px. */
+  .modal.wide{max-width:880px; max-height:calc(100vh - 40px); display:flex; flex-direction:column;}
+  .modal.wide .mbody{overflow:auto; min-height:0;}
+  .modal tr.pr-now td{background:#eff6ff;}
+  .modal .pr-chip{display:inline-block; margin-left:6px; padding:1px 8px; border-radius:99px; background:#dbeafe; color:#1d4ed8; font-size:10.5px; font-weight:700; vertical-align:1px;}
+  .modal .mact{white-space:nowrap;}
+  @media (max-width:640px){
+    .modal.wide .mact{white-space:normal;}
+    .modal.wide .mact .btn{margin:3px 2px 0 0;}
+  }
+  /* ===== Responsive mobile ===== */
+  @media (max-width:760px){
+    header{padding:12px 14px;}
+    nav{flex-wrap:wrap; padding:0 8px;}
+    main{padding:10px;}
+    .grid2, .grid2e{grid-template-columns:1fr;}
+    .gridk{grid-template-columns:1fr 1fr;}
+
+    .card{overflow-x:auto;}            /* bảng nhập nhiều cột cuộn ngang trong card, không vỡ trang */
+    .plist .period{min-width:600px;}
+    .incrow{min-width:470px;} .erow{min-width:420px;} .msrow{min-width:470px;} .lrow{min-width:460px;}
+  }
+  @media (max-width:1080px){ .gridp{grid-template-columns:1fr;} }
+  /* ===== BĐS v8 — mỗi BĐS một khung viền màu riêng để phân biệt nhanh ===== */
+  .property-card{border:2px solid var(--line);border-left-width:6px;border-radius:10px;padding:10px 12px;margin:10px 0;}
+  .property-card .lrow{border:0;padding:0;background:transparent;}
+  .prow1{display:grid;grid-template-columns:minmax(160px,1fr) auto 28px;gap:8px;align-items:end;margin-bottom:6px;}
+  .pc0{border-color:#2563eb;background:#eff6ff;} .pc1{border-color:#059669;background:#ecfdf5;}
+  .pc2{border-color:#d97706;background:#fffbeb;} .pc3{border-color:#dc2626;background:#fef2f2;}
+  .pc4{border-color:#7c3aed;background:#f5f3ff;} .pc5{border-color:#0891b2;background:#ecfeff;}
+  .pc6{border-color:#db2777;background:#fdf2f8;} .pc7{border-color:#475569;background:#f8fafc;}
+  .pexp{margin-top:8px;padding-top:6px;border-top:1px dashed var(--line);}
+  .pexpt{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:4px;}
+  .pexpwrap{overflow-x:auto;}
+  .pexprow{display:grid;grid-template-columns:86px minmax(130px,1fr) 180px 28px;gap:6px;align-items:center;margin-bottom:4px;min-width:430px;}
+  .pexprow.head{font-size:10.5px;color:var(--muted);font-weight:700;text-transform:uppercase;margin-bottom:2px;}
+  .property-card .row{flex-wrap:wrap;}   /* màn hẹp: các ô xuống dòng thay vì tràn ngang */
+  summary{cursor:pointer;font-weight:600;color:var(--blue);padding:4px 0 10px;}
+  /* ===== Đợt 10 — header gọn một hàng: tiêu đề TRÁI, hồ sơ (profile) PHẢI tận khoảng trống;
+     nút kiểu .hbtn nổi trên nền xanh đậm, trạng thái chữ sáng đọc được trên xanh ===== */
+  header{background:linear-gradient(135deg,#1e3a8a,#2563eb); color:#fff; padding:12px 28px; display:flex; align-items:center; justify-content:space-between; gap:10px 20px; flex-wrap:wrap;}
+  header .htxt h1{font-size:19px;} header .htxt p{font-size:12px; opacity:.85; margin-top:2px;}
+  #profileBar{display:flex; gap:6px; align-items:center; flex-wrap:wrap; justify-content:flex-end; flex:1 1 480px; max-width:900px;}
+  #profileBar .ptitle{font-size:11px;font-weight:700;color:rgba(255,255,255,.85);letter-spacing:.6px;text-transform:uppercase;white-space:nowrap;}
+  #profileSelect{width:auto;max-width:230px;min-width:150px;padding:5px 8px;font-size:12.5px;border:none;border-radius:8px;}
+  #profileBar .hbtn{background:rgba(255,255,255,.13); color:#fff; border:1px solid rgba(255,255,255,.38); border-radius:8px; padding:5px 10px; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;}
+  #profileBar .hbtn:hover{background:rgba(255,255,255,.26);}
+  #profileBar .hbtn.primary{background:#fff; color:#1d4ed8; border-color:#fff;}
+  #profileBar .hbtn.primary:hover{background:#dbeafe;}
+  #profileBar .hbtn.danger{background:rgba(220,38,38,.28); border-color:rgba(252,165,165,.55);}
+  #profileBar .hbtn.danger:hover{background:rgba(220,38,38,.5);}
+  #profileBar .hbtn:disabled{opacity:.45; cursor:not-allowed;}
+  .plist .period input[disabled]{border:none; padding:6px 0; background:transparent; color:var(--muted); font-weight:600; cursor:default;}
+  #profileStatus{flex-basis:100%; text-align:right; font-size:11.5px; color:rgba(255,255,255,.92); line-height:1.5;}
+  #profileStatus b{color:#fff;}
+  #profileStatus .ps-saved{color:#a7f3d0;}
+  #profileStatus .ps-dirty{color:#fde68a;}
+  #profileStatus .ps-err{color:#fecaca;}
+  @media (max-width:1080px){ #profileBar{justify-content:flex-start; flex-basis:100%; max-width:none;} #profileStatus{text-align:left;} }
+
+  .milestone-income,.milestone-allocation{display:grid;gap:6px;align-items:center;padding:8px;border:1px solid var(--line);border-radius:10px;margin-bottom:6px;background:#fbfdff;}
+  .milestone-income{grid-template-columns:minmax(56px,.5fr) minmax(48px,.4fr) minmax(140px,1.3fr) 130px 130px 76px 30px;min-width:740px;}
+  .milestone-allocation{grid-template-columns:70px 60px minmax(150px,1fr) repeat(5,minmax(68px,.45fr)) 48px 30px;min-width:840px;}
+  .milestone-head{background:#f1f5f9;border:none;padding:4px 8px;font-size:10.5px;color:var(--muted);font-weight:700;text-transform:uppercase;}
+  .milestone-income .cyear,.milestone-allocation .cyear{font-size:13px;font-weight:700;color:var(--ink);padding:6px 2px;font-variant-numeric:tabular-nums;}
+  .milestone-income .fsalary{font-size:13px;color:var(--ink);text-align:right;padding:6px 2px;font-variant-numeric:tabular-nums;white-space:nowrap;}
+  .milestone-scroll{overflow-x:auto;}
+  .allocation-sum{font-size:12px;color:var(--muted);text-align:center;}.allocation-sum.invalid{color:#b91c1c;font-weight:700;}
+  .pension-milestone{background:#f8faff;}.pension-milestone .cyear{color:var(--muted);}
+  /* Đ27 — dòng neo năm 0: cột Năm xám như dòng hưu; phần còn lại của dòng vẫn sáng bình thường */
+  .milestone-anchor .cyear{color:var(--muted);}
+  .allocation-settings{display:flex;gap:16px;align-items:end;flex-wrap:wrap;margin:0 0 14px;}.allocation-settings>div{width:190px;}.allocation-settings label{font-size:12px;}
+  /* Đ2 13/09 — tiêu đề bảng phân bổ kèm nút đồng bộ nhỏ bên cạnh */
+  .cardheadrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 10px;}.cardheadrow h3{margin:0;}.cardheadrow .btn{white-space:nowrap;}
+  .investment-stage{border:1px solid var(--line);border-left:4px solid #0d9488;border-radius:10px;padding:16px;margin:12px 0;background:#fbfdff;}
+  .strategy-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;align-items:end;}
+  .strategy-weights{display:grid;grid-template-columns:repeat(4,minmax(90px,1fr));gap:8px;}
+  .strategy-weights label{font-size:12px;}
+  .strategy-identity{margin:14px 0 18px;}
+  .strategy-parts{display:grid;grid-template-columns:minmax(230px,1fr) minmax(330px,1.4fr);gap:16px;margin:18px 0;}
+  .strategy-part{padding:18px;background:white;border:1px solid var(--line);border-radius:10px;min-width:0;}
+  .strategy-part h4{margin:0 0 16px;color:#0f766e;font-size:16px;}
+  .strategy-part p{margin:10px 0;}
+  .strategy-example{padding:10px;background:#f0fdfa;border-radius:6px;font-size:13px;}
+  .strategy-rules{border-top:1px solid var(--line);padding:14px 0;}
+  .strategy-rules summary{cursor:pointer;font-weight:600;}
+  .strategy-rules[open] summary{margin-bottom:16px;}
+  .strategy-recap{font-size:13px;line-height:1.7;color:#475569;}
+  .strategy-transition{margin-bottom:16px;}
+  @media(max-width:800px){.strategy-parts{grid-template-columns:1fr;}}
+  .strategy-flow{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0;}
+  .strategy-flow>div{padding:12px;border:1px solid var(--line);border-radius:8px;background:#f0fdfa;}
+  .strategy-flow .deficit{background:#fff7ed;}
+  .strategy-guide{margin-top:16px;line-height:1.65;}.strategy-guide summary{cursor:pointer;font-weight:700;}
+  .strategy-table-wrap{overflow:auto;margin:10px 0;}.strategy-table-wrap table{min-width:630px;width:100%;}
+  .strategy-stage-title{display:flex;align-items:center;justify-content:space-between;gap:12px;}
+  @media(max-width:640px){.strategy-flow{grid-template-columns:1fr;}.strategy-weights{grid-template-columns:repeat(2,minmax(90px,1fr));}.investment-stage{padding:10px;}}
+  /* ===== Tab 8 — tuổi khoản tiết kiệm thay thế bị cạn theo từng năm đóng tiếp ===== */
+  .cmp-summary{font-size:13px;line-height:1.65;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:10px 12px;}
+  .cmp-settings{border:1px solid var(--line);border-radius:10px;padding:14px;margin:12px 0;background:#f8fafc;}
+  .cmp-settings h4{margin:0 0 4px;}
+  .cmp-ranges{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:10px 0;}
+  .cmp-range{min-width:0;margin:0;padding:10px 12px 12px;border:1px solid #cbd5e1;border-radius:9px;background:#fff;}
+  .cmp-range legend{padding:0 5px;font-size:13px;font-weight:700;color:#1e3a5f;}
+  .cmp-range-pair{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px;}
+  .cmp-range-pair label{display:block;min-width:0;color:var(--muted);font-size:12px;font-weight:600;}
+  .cmp-range-pair input{display:block;min-width:0;width:100%;margin-top:4px;font-size:14px;}
+  .cmp-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:10px 0;}
+  .cmp-options .cmp-range label{display:block;min-width:0;color:var(--muted);font-size:12px;font-weight:600;}
+  .cmp-options .cmp-range input,.cmp-options .cmp-range select{display:block;width:100%;min-width:0;margin-top:4px;font-size:14px;}
+  .cmp-error{color:#b91c1c;font-size:13px;}
+  .cmp-table th,.cmp-table td{vertical-align:top;}
+  .cmp-table td:first-child,.cmp-table td:nth-child(2){white-space:nowrap;}
+  .cmp-yes{color:#047857;font-weight:700;}
+  .cmp-none{color:var(--muted);}
+  .cmp-legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;}
+  .cmp-legend span{padding:5px 9px;border-radius:7px;background:#f1f5f9;font-size:12px;}
+  /* Tab 6 — nhóm lãi suất (tái dùng .cmp-range của Tab 8) */
+  .cmp-range-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;}
+  .cmp-range-3 label{display:block;min-width:0;color:var(--muted);font-size:12px;font-weight:600;}
+  .cmp-range-3 input{display:block;min-width:0;width:100%;margin-top:4px;font-size:14px;}
+  .cmp-range.span2{grid-column:span 2;}
+  .cmp-range .hint{margin:8px 0 0;font-size:12px;}
+  @media(max-width:760px){.cmp-ranges,.cmp-options{grid-template-columns:1fr;}.cmp-range-3{grid-template-columns:1fr;}.cmp-range.span2{grid-column:auto;}}
+  @media(max-width:760px){
+    .strategy-table-wrap .cmp-table{min-width:0;}
+    .cmp-table tr:first-child{display:none;}
+    .cmp-table tr{display:grid;grid-template-columns:1fr 1fr;gap:0 8px;margin:8px 0;padding:8px;border:1px solid var(--line);border-radius:9px;}
+    .cmp-table td{display:block;border:0;padding:5px 3px;white-space:normal!important;}
+    .cmp-table td:nth-child(n+3){grid-column:1/-1;}
+    .cmp-table td::before{content:attr(data-label);display:block;margin-bottom:2px;color:var(--muted);font-size:11px;font-weight:500;}
+  }
+
+</style>
+</head>
+<body>
+
+<header>
+  <div class="htxt">
+    <h1>LifeHorizon - Dòng tiền cuộc đời</h1>
+    <p>Phiên bản 1.1 · Mô phỏng dòng tiền theo tháng</p>
+  </div>
+  <!-- ===== Hồ sơ (profile) — mỗi hồ sơ là một file JSON trong thư mục profiles (app/server.js);
+       đợt 10: dời từ hàng riêng lên tận khoảng trống bên phải của header ===== -->
+  <div id="profileBar">
+    <span class="ptitle">Hồ sơ</span>
+    <select id="profileSelect" aria-label="Chọn hồ sơ để mở"></select>
+    <button type="button" class="hbtn primary" id="prSave" title="Ghi cấu hình đang chỉnh vào file hồ sơ đang mở">💾 Lưu</button>
+    <button type="button" class="hbtn" id="prSaveAs" title="Sao chép cấu hình đang chỉnh sang một hồ sơ mới có tên riêng">Lưu thành bản mới</button>
+    <button type="button" class="hbtn" id="prManage" title="Danh sách hồ sơ + thêm mới, nhập/xuất JSON, xóa hồ sơ đang mở">Quản lý</button>
+    <input type="file" id="prFile" accept=".json,application/json" hidden>
+    <span id="profileStatus" role="status"></span>
+  </div>
+</header>
+
+<nav>
+  <button class="active" data-tab="t1">1 · Thông tin</button>
+  <button data-tab="t2">2 · Tài sản</button>
+  <button data-tab="t3">3 · BHXH</button>
+  <button data-tab="t4">4 · Chi phí</button>
+  <button data-tab="t5">5 · Thu nhập &amp; phân bổ</button>
+  <button data-tab="t6">6 · Lợi suất đầu tư</button>
+  <button data-tab="t7">7 · Mô phỏng</button>
+  <button data-tab="t8">8 · BHXH hay Tiết kiệm?</button>
+</nav>
+
+<main>
+<div id="migrationNotice" class="hint" role="status"></div>
+<div id="saveStatus" role="alert"></div>
+<div id="sampleBadge"></div>
+
+<!-- ============ TAB 1 — THÔNG TIN ============ -->
+<section id="t1" class="tab active">
+  <div class="tabMsg"></div>
+  <div class="grid2">
+    <div>
+      <div class="card">
+        <h3>Hồ sơ người trụ cột</h3>
+        <label for="mainName">Tên hiển thị (dùng ở Tab 3 · BHXH &amp; Tab 7 · Mô phỏng)</label>
+        <input id="mainName" placeholder="ví dụ: Anh" maxlength="40">
+        <div class="row">
+          <div><label>Năm sinh</label><input type="number" id="birthYear" value="1990"></div>
+          <div><label>Giới tính</label><select id="gender"><option value="male">Nam</option><option value="female">Nữ</option></select></div>
+        </div>
+        <label>Tháng bắt đầu (mm/yyyy)</label><input id="startMonth" type="text" inputmode="numeric" aria-label="Tháng bắt đầu" placeholder="09/2026">
+        <label>Số năm mô phỏng</label>
+        <input type="number" id="simYears" value="40" min="1" max="100">
+        <div class="hint">Khung thời gian mô phỏng. Tài sản ở Tab 2 · chi tiêu ở Tab 4 · BHXH ở Tab 3 · thu nhập &amp; phân bổ ở Tab 5 · lợi suất ở Tab 6.</div>
+      </div>
+    </div>
+    <div>
+      <div class="gridk">
+        <div class="kpi"><div class="t">Tuổi nghỉ hưu</div><div class="v" id="kRetAge">—</div><div class="s" id="kRetMonth">—</div></div>
+        <div class="kpi"><div class="t">Năm đầu tham gia BHXH</div><div class="v" id="kFirstYear">—</div><div class="s" id="kCohort">—</div></div>
+        <div class="kpi"><div class="t">Kết thúc mô phỏng</div><div class="v" id="kEndAge">—</div><div class="s" id="kEndYear">—</div></div>
+      </div>
+      <div class="card" style="margin-top:12px;">
+        <h3>Dòng đời</h3>
+        <div class="tl" id="lifeTL"></div>
+        <div class="legend" style="margin-top:10px;">
+          <span><i style="background:#2563eb"></i>Doanh nghiệp</span>
+          <span><i style="background:#059669"></i>Nhà nước / Sự nghiệp</span>
+          <span><i style="background:#d97706"></i>Tự nguyện / tự do</span>
+          <span><i style="background:#94a3b8"></i>Nghỉ / không đóng BHXH</span>
+          <span><i style="display:inline-block;width:3px;height:13px;border-radius:1px;background:#059669"></i>&nbsp;nghỉ hưu</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ TAB 2 — TÀI SẢN ============ -->
+<section id="t2" class="tab">
+  <div class="tabMsg"></div>
+  <div class="card">
+    <h3 id="aTitle">Tài sản thanh khoản cao ban đầu</h3>
+    <p class="hint">Nhập số đang có hôm nay. Tỷ lệ các nhóm sẽ được cân đối lần đầu ở Tab 5 · Thu nhập &amp; phân bổ.</p>
+    <div class="row"><div><label id="lbMMF">Quỹ MMF</label><input type="text" inputmode="numeric" class="money" id="aMMF" value="150.000.000"></div>
+    <div><label id="lbTK">Tiết kiệm</label><input type="text" inputmode="numeric" class="money" id="aTK" value="50.000.000"></div></div>
+    <div class="row"><div><label id="lbTP">Quỹ Trái phiếu</label><input type="text" inputmode="numeric" class="money" id="aTP" value="200.000.000"></div>
+    <div><label id="lbCP">Quỹ Cổ phiếu/ETF</label><input type="text" inputmode="numeric" class="money" id="aCP" value="300.000.000"></div></div>
+    <div class="row"><div><label id="lbGold">Vàng — số chỉ</label><input type="number" id="goldChi" value="4" step="1" min="0"></div>
+    <div><label>Giá vàng hiện tại (đ/chỉ)</label><input type="text" inputmode="numeric" class="money" id="goldPrice" value="14.000.000"></div></div>
+    <div class="hint" id="goldSellNote"></div>
+  </div>
+  <div class="card">
+    <h3 id="lbLandH">Bất động sản</h3>
+    <div id="plotList"></div>
+    <button class="btn mini ghost" id="addPlot">＋ Thêm bất động sản</button>
+    <div class="hint" id="assetTotal">Tổng tài sản hiện tại: —</div>
+    <p class="hint">Nhập giá trị, tiền thuê, giá bán và chi phí theo giá hôm nay. Để trống “Năm sở hữu” nếu đã có BĐS; để trống “Thuê từ năm” nếu cho thuê ngay.</p>
+    <p class="hint">Chỉ nhập “Năm bán” khi đã có kế hoạch bán. Nếu không, BĐS đánh dấu “Có thể bán” chỉ được bán khi tài sản thanh khoản không đủ chi. Bán xong thì hết tiền thuê từ tháng sau.</p>
+    <select id="sellRule" hidden aria-hidden="true"><option value="nearPeak">Tài sản ít giảm so với đỉnh</option><option value="cpFirst">Cổ phiếu trước</option></select>
+  </div>
+</section>
+
+<!-- ============ TAB 3 — BHXH ============ -->
+<section id="t3" class="tab">
+  <div class="tabMsg"></div>
+  <!-- Đ3 — tổng hợp gia đình lên TRÊN CÙNG, trải toàn bề ngang: một dòng mỗi người + dòng tổng,
+       nhìn tổng quan trước khi xuống tab con nhập liệu từng người -->
+  <div class="card">
+    <h3>Gia đình — thời điểm nghỉ hưu &amp; lương hưu từng người</h3>
+    <div id="familyLines"></div>
+  </div>
+  <!-- M1 — tab con chọn người của gia đình: người chính + từng thành viên thêm (năm sinh/giới tính
+       người chính vẫn ở Tab 1 — Hồ sơ) -->
+  <div class="segbtns" id="peopleTabs" style="margin-bottom:2px;"></div>
+  <div id="personMeta"></div>
+  <!-- Đ36 — lưới 2 cột: "Giai đoạn đóng BHXH" BÊN TRÁI (7 cột mỗi dòng cần ~600px, không kẹp cột
+       hẹp); cột PHẢI gồm ô "Lương hưu" + khối "Bảo hiểm xã hội" (3 mức hưu đang dùng) ngay dưới —
+       đưa lên trên cùng để tiện theo dõi, không phải cuộn xuống cuối tab -->
+  <div class="gridp">
+    <div class="card">
+      <h3 id="periodTitle">Giai đoạn đóng BHXH</h3>
+      <div id="orderWarn"></div>
+      <div class="plist" id="periodList"></div>
+      <button class="btn mini ghost" id="addPeriod">＋ Thêm giai đoạn đóng</button>
+      <div class="hint" id="bhxhMonthsHint"></div>
+    </div>
+    <div>
+      <div class="card">
+        <h3 id="psCardTitle">Lương hưu</h3>
+        <div style="margin-top:2px; margin-bottom:4px;"><button type="button" class="btn mini" id="psUsePeriods">⚙ Tính toán lương hưu từ các giai đoạn</button></div>
+        <div style="display:flex; align-items:center; gap:8px; margin-top:7px;">
+          <label for="psAmount" style="flex:1; margin:0;">Mức hưu theo giá hiện tại (đ/tháng)</label>
+          <span class="badge" id="psSourceChip">○ trống</span>
+        </div>
+        <div><input type="text" inputmode="numeric" class="money" id="psAmount" value="0"></div>
+        <div class="hint" id="psConvertLine" style="margin-top:5px; font-size:12px; color:var(--ink);">Nhập mức hưu bạn biết <b>theo giá hiện tại</b> — phần mềm tự quy đổi lạm phát đến tháng hưởng.</div>
+        <div class="row">
+          <div><label for="psStart">Bắt đầu (năm)</label><input type="number" id="psStart" value="2052" min="1900" max="2200"></div>
+          <div><label for="psMonth">Bắt đầu (tháng)</label><input type="number" id="psMonth" value="1" min="1" max="12"></div>
+          <div><label for="psGrowth">Tăng %/năm</label><input type="number" id="psGrowth" value="8" step="0.5"></div>
+        </div>
+        <div class="hint" style="margin-top:8px">Tăng %/năm áp dụng sau khi bắt đầu hưởng — mỗi đúng 12 tháng, tháng hưởng đầu chưa tăng.</div>
+        <div id="psBasisAsk" style="display:none; margin-top:8px; border:1px solid #fde047; background:#fef9c3; border-radius:10px; padding:8px 10px;">
+          <b>Bản lưu cũ — cần xác nhận nghĩa mức hưu:</b> số tiền đang lưu được nhập theo quy ước cũ.
+          <div style="margin-top:6px; display:flex; gap:6px; flex-wrap:wrap;">
+            <button type="button" class="btn mini" id="psBasisCur">Đây là giá theo sức mua hiện tại</button>
+            <button type="button" class="btn mini" id="psBasisRet">Đây là giá tại tháng bắt đầu hưởng</button>
+          </div>
+        </div>
+        <details class="hint" id="psGuide" style="margin-top:8px" open>
+          <summary>Hướng dẫn chi tiết</summary>
+          <div style="text-align:justify; margin-top:6px;"><b>Tính tự động:</b> Bạn thêm/sửa giai đoạn đóng BHXH ở bên trái. Rồi bấm nút ⚙ Tính toán lương hưu từ các giai đoạn, ứng dụng tự tính mức hưu và tháng hưởng (yêu cầu đủ 180 tháng đóng). Lương này đang theo giá hiện tại; phần mềm tự nhân lạm phát (Tab 4) đến tháng bắt đầu hưởng rồi tăng “<span class="gdGrowth">8%/năm</span>” mỗi năm.</div>
+          <div style="text-align:justify; margin-top:6px;"><b>Nhập tay:</b> Nếu bạn tự ước lượng được mức lương hưu của bản thân, ghi mức ước lượng lương hưu mỗi tháng theo giá hiện tại; phần mềm tự nhân lạm phát (Tab 4) đến tháng bắt đầu hưởng rồi tăng “<span class="gdGrowth">8%/năm</span>” mỗi năm.</div>
+        </details>
+      </div>
+      <div class="card" id="pensionLawCol">
+        <h3 id="lawCardTitle">Bảo hiểm xã hội</h3>
+        <div id="useGrid">
+          <div class="pension-result">
+            <h4>Lương hưu theo giá hiện tại</h4>
+            <div class="pension-value" id="kUseBase">—</div>
+            <div class="pension-meta" id="kUseBaseS">—</div>
+          </div>
+          <div class="pension-result primary">
+            <h4 id="kUseAmtT">Lương hưu khi bắt đầu nhận</h4>
+            <div class="pension-value" id="kUseAmt">—</div>
+            <div class="pension-meta" id="kUseAmtS">—</div>
+          </div>
+          <div class="pension-result">
+            <h4>Mức tăng sau nghỉ hưu</h4>
+            <div class="pension-value" id="kUseGrowth">—</div>
+            <div class="pension-meta" id="kUseGrowthS">—</div>
+          </div>
+        </div>
+        <div class="pension-notice" id="kUseNotice" style="display:none;"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ TAB 4 — CHI PHÍ ============ -->
+<section id="t4" class="tab">
+  <div class="tabMsg"></div>
+  <div class="card">
+    <h3>Lạm phát</h3>
+    <div class="row">
+      <div><label>Lạm phát / tăng chi (%/năm)</label><input type="number" id="infl" value="5" step="0.5"></div>
+
+    </div>
+
+  </div>
+  <div class="grid2e">
+    <div class="card">
+      <h3>Chi phí tăng theo lạm phát (giá hiện tại)</h3>
+      <div class="milestone-scroll"><div id="msList"></div></div>
+      <button class="btn mini ghost" id="addMs">＋ Mốc chi tiêu</button>
+      <div class="hint">Nhập mức chi/tháng theo <b>giá hôm nay</b>. Mỗi mốc áp dụng đến trước mốc kế tiếp; <b>mốc cuối tự kéo dài đến hết kỳ mô phỏng</b>. Ví dụ kỳ 40 năm, mốc cuối năm 10 áp dụng cho 30 năm còn lại, từ năm 10 đến trước năm 40.<br>Chi tháng ở năm thứ N = mức chi của mốc đang áp dụng × (1+lạm phát)<sup>N</sup>. Ngay năm 10 đã tính đủ 10 năm lạm phát từ tháng gốc; các năm sau tiếp tục tăng hằng năm. <b>Năm thứ</b> tính từ tháng gốc (0 = bây giờ), đổi mức vào đúng tháng kỷ niệm; ô năm có tooltip tháng áp dụng cụ thể. Cột <b>Năm</b> là năm dương lịch của tháng bắt đầu áp dụng (tính theo tháng gốc ở Tab 4), <b>chỉ đọc</b> — đổi tháng gốc thì tự cập nhật.<br>Khoản trả cố định không tăng theo thời gian (trả góp ngân hàng, phí bảo hiểm theo hợp đồng) nhập ở bảng <b>Chi phí cố định</b> bên cạnh.</div>
+    </div>
+    <div class="card">
+      <h3>Chi phí cố định (không tăng theo lạm phát)</h3>
+      <div class="milestone-scroll"><div id="fmsList"></div></div>
+      <button class="btn mini ghost" id="addFixedMs">＋ Khoản cố định</button>
+      <div class="hint">Nhập <b>số tiền thực trả mỗi tháng</b> — giữ nguyên đến mốc kế, <b>không quy đổi theo lạm phát</b> (sức mua thực tế giảm dần). Mỗi mốc là <b>tổng các khoản đang chạy</b>: gộp các khoản cùng thời kỳ vào một mốc (vd trả góp 20tr + bảo hiểm 3tr → nhập 23tr); hết trả góp thì mốc kế là 3tr, không phải 0. <b>Kết thúc khoản:</b> thêm mốc mức 0 ở <b>năm thứ sau năm trả cuối</b> — mốc có hiệu lực từ đầu năm thứ của nó, nên mốc 0 năm thứ 15 sẽ cắt luôn tiền năm thứ 15. Khoản được điều chỉnh theo thời gian hoặc theo hợp đồng thì nhập ở bảng Chi phí tăng theo lạm phát.</div>
+    </div>
+  </div>
+  <div class="card">
+    <h3>Sự kiện chi lớn (giá hiện tại)</h3>
+    <div id="evChiList"></div>
+    <button class="btn mini ghost" id="addEvChi">＋ Sự kiện chi</button>
+    <div class="hint">Mọi khoản thu và chi được xử lý ở cuối tháng. Dùng dòng thu cuối tháng trước; thiếu mới rút tài sản theo phân bổ ở Tab 5. Hiển thị kèm giá trị tương lai sau lạm phát.</div>
+  </div>
+</section>
+
+<!-- ============ TAB 5 — THU NHẬP ============ -->
+<section id="t5" class="tab">
+  <div class="tabMsg"></div>
+  <div class="card">
+    <h3>Các mốc thu nhập/tháng (không gồm lương hưu)</h3>
+    <div class="hint" style="margin:-4px 0 10px;">Nhập số theo <b>giá hôm nay</b>; cột “tương lai” = số nhập × (1+Tăng %/năm)<sup>số năm tới mốc</sup>. <b>Tăng %/năm là tốc độ tăng danh nghĩa tổng</b> — mốc mới mặc định bằng lạm phát (Tab 4); nhập <b>0</b> nếu khoản thu không tăng (vd doanh thu gửi xe theo giá quy định). Dòng 🔒 “{tên} về hưu” lấy từ Tab 3 · BHXH — lương hưu không nằm trong dòng tiền thu nhập của bảng này.</div>
+    <div class="hint" style="margin:-4px 0 10px;"><b>Ghi chú:</b> Nếu cả nhà đã về hưu, không còn dòng tiền thu nhập, hãy tự thêm 1 dòng cuối để xác định thu nhập = 0 — lúc đó trong mô phỏng, dòng tiền thu nhập từ năm đó trở đi sẽ bằng 0. Dòng tiền hưu thì năm nào người nào bắt đầu nhận hưu thì tính bổ sung lương hưu người đó cho đến hết mô phỏng.</div>
+    <div class="milestone-scroll" id="investmentList"></div>
+    <button class="btn mini ghost" id="addInc">＋ Thêm mốc thu nhập</button>
+  </div>
+  <div class="card">
+    <div class="cardheadrow"><h3>Các mốc phân bổ đầu tư (Tài sản thanh khoản cao)</h3><button type="button" class="btn mini ghost" id="syncAllocIncome" title="Giữ phân bổ tài sản lần đầu ở năm thứ 0; các mốc sau khớp với giai đoạn thu nhập. Mốc mới kế thừa tỷ lệ của mốc trước.">⟳ Đồng bộ giai đoạn thu nhập</button></div>
+    <div class="allocation-settings"><div><label for="lifeReview">Cân bằng danh mục mỗi</label><select id="lifeReview"><option value="1">1 tháng</option><option value="3">3 tháng</option><option value="6">6 tháng</option><option value="12">1 năm</option></select></div></div>
+    <p class="hint">Dòng năm 0 phân bổ tài sản ban đầu ở Tab 2. MMF mục tiêu = số tháng dự phòng × chi sinh hoạt tháng đó (chưa trừ thu nhập). Giữa hai kỳ cân bằng, chi có thể làm MMF thấp hơn mục tiêu; chỉ bán bổ sung sớm khi còn dưới một nửa mục tiêu. Tiền dành cho khoản chi lớn đã nhập trong 12 tháng tới được giữ lại trước khi mua thêm tài sản. Mô hình tránh rút sổ hoặc quỹ trái phiếu còn non kỳ chỉ để chỉnh tỷ trọng và hạn chế bán rồi mua lại tài sản trong 12 tháng. Phần còn lại chia theo tỷ lệ bên dưới.</p>
+    <div class="milestone-scroll" id="allocationList"></div>
+    <button class="btn mini ghost" id="addAllocation">＋ Thêm mốc phân bổ</button>
+  </div>
+  <div class="card">
+    <h3>Sự kiện thu lớn (giá hiện tại)</h3>
+    <div id="evThuList"></div>
+    <button class="btn mini ghost" id="addEvThu">＋ Sự kiện thu</button>
+    <div class="hint">Thưởng, thừa kế… Bán bất động sản nhập ở Tab 2.</div>
+  </div>
+</section>
+
+<!-- ============ TAB 6 — ĐẦU TƯ ============ -->
+<section id="t6" class="tab">
+  <div class="tabMsg"></div>
+  <div class="card">
+    <h3>Lãi suất và chi phí giao dịch</h3>
+    <fieldset class="cmp-range" style="margin:10px 0 12px;">
+      <legend>Tiết kiệm — lãi theo kỳ hạn (%/năm)</legend>
+      <div class="cmp-range-3">
+        <label for="rTKShort">1–5 tháng<input type="number" id="rTKShort" value="3" min="0" max="100" step="0.1"></label>
+        <label for="rTKMedium">6–11 tháng<input type="number" id="rTKMedium" value="4.5" min="0" max="100" step="0.1"></label>
+        <label for="rTK">12 tháng<input type="number" id="rTK" value="6.5" step="0.1"></label>
+      </div>
+      <div class="hint">Số dư đầu kỳ được coi là tiền có thể chia sổ mới. Từ lịch thu chi đã nhập, sau khi trừ MMF và sổ sắp đáo hạn: thiếu ở tháng 3 thì gửi 3 tháng (lãi nhóm 1–5); tháng 8 thì gửi 8 tháng (nhóm 6–11); tiền còn lại gửi 12 tháng. Chia lại không phá sổ đang gửi; bán sớm để chi, nạp MMF hoặc cân bằng tài sản sẽ mất lãi kỳ hiện tại trên phần rút.</div>
+    </fieldset>
+    <div class="cmp-ranges" style="margin:0;">
+      <fieldset class="cmp-range span2">
+        <legend>Quỹ đầu tư — lãi hiệu dụng (%/năm)</legend>
+        <div class="cmp-range-pair">
+          <label for="rMMF">Quỹ MMF<input type="number" id="rMMF" value="4.5" step="0.1"></label>
+          <label for="rTP">Quỹ Trái phiếu<input type="number" id="rTP" value="6" step="0.1"></label>
+        </div>
+        <div class="cmp-range-pair" style="margin-top:8px;">
+          <label for="tpEarlyFee">Phí rút trái phiếu sớm (%)<input type="number" id="tpEarlyFee" value="2" min="0" max="10" step="0.01"></label>
+          <label for="tpMinMonths">Miễn phí sau (tháng)<input type="number" id="tpMinMonths" value="12" min="1" max="120" step="1"></label>
+        </div>
+        <div class="hint">Lãi nhập gốc hằng tháng và được bảo toàn khi rút. Nhập thời gian và phí rút sớm theo biểu phí quỹ anh dùng; mặc định 12 tháng / 2%.</div>
+      </fieldset>
+      <fieldset class="cmp-range">
+        <legend>Vàng (%)</legend>
+        <div class="cmp-range-pair">
+          <label for="goldSpread">Chênh lệch mua–bán<input type="number" id="goldSpread" value="2" min="0" max="99" step="0.1"></label>
+        </div>
+        <div class="hint">Giá bán lại = giá mua (Tab 2) × (1 − %); NAV vàng tính theo giá bán lại.</div>
+      </fieldset>
+    </div>
+    <fieldset class="cmp-range" style="margin:12px 0 0;">
+      <legend>Phí Quỹ Cổ phiếu/ETF (% mỗi lệnh)</legend>
+      <div class="cmp-range-pair">
+        <label for="cpBuyFee">Phí mua<input type="number" id="cpBuyFee" value="0" min="0" max="10" step="0.01"></label>
+        <label for="cpSellFee">Phí bán<input type="number" id="cpSellFee" value="0" min="0" max="10" step="0.01"></label>
+      </div>
+      <div class="hint">Nhập theo biểu phí sản phẩm đang dùng. 0% nghĩa là mô phỏng chưa trừ phí; các khoản thuế/phí khác chưa nhập cũng chưa được tính.</div>
+    </fieldset>
+    <div class="hint">Lãi suất hiện tại và các kỳ tái tục là giả định anh nhập; không tự cập nhật theo ngân hàng.</div>
+  </div>
+  <div class="card">
+    <h3>Kịch bản lợi suất — đổi CAGR/σ hoặc kéo chấm năm</h3>
+    <div class="schart" id="scGold"></div>
+    <div class="schart" id="scCP"></div>
+    <div class="schart" id="scLand"></div>
+    <div class="hint">Các đường giá vàng, cổ phiếu và BĐS là kịch bản giả định, không phải dự báo. Mô phỏng dùng giá đã xuất hiện đến từng tháng để giao dịch; không biết trước các tháng sau. “Năm 0” là 12 tháng từ tháng bắt đầu.</div>
+  </div>
+
+</section>
+
+<!-- ============ TAB 7 — MÔ PHỎNG ============ -->
+<section id="t7" class="tab">
+  <div id="simWarn"></div>
+  <div class="gridk">
+    <div class="kpi"><div class="t">Tuổi hết tiền (nếu có)</div><div class="v" id="rRunOut">—</div><div class="s" id="rRunOutS">—</div></div>
+    <div class="kpi"><div class="t">Thanh khoản cuối kỳ (không kể BĐS)</div><div class="v" id="rLiq">—</div><div class="s" id="rLiqS">—</div></div>
+    <div class="kpi"><div class="t">Tài sản cuối kỳ (giá trị thực)</div><div class="v" id="rReal">—</div><div class="s" id="rRealS">—</div></div>
+  </div>
+  <div class="gridk" style="margin-top:10px;">
+    <div class="kpi"><div class="t">Lương hưu / tháng (lúc bắt đầu)</div><div class="v" id="rPension">—</div><div class="s" id="rPensionS">—</div></div>
+    <div class="kpi"><div class="t">Tài sản cuối kỳ (danh nghĩa)</div><div class="v" id="rEndW">—</div><div class="s" id="rEndWS">—</div></div>
+    <div class="kpi" id="rShortCard" hidden><div class="t">Tổng chi chưa được tài trợ</div><div class="v" id="rShort">—</div><div class="s" id="rShortS">—</div></div>
+  </div>
+  <div class="card" style="margin-top:10px;">
+    <div class="kpi" style="border:0;padding:0;"><div class="t">Kiểm tra rủi ro — 1.000 đường lợi suất tương lai khác nhau</div>
+      <div style="display:flex; gap:10px; align-items:center; margin-top:6px;">
+        <button type="button" class="btn" id="riskBtn">⚙ Kiểm tra rủi ro — 1.000 kịch bản</button>
+        <span class="hint" id="riskOut" style="margin:0;">Mỗi lần bấm tạo 1.000 đường giá giả định từ cấu hình đã nhập. P10/P50/P90 và tỷ lệ cạn tiền chỉ là kết quả trong mô hình, không phải xác suất thực tế.</span>
+      </div>
+    </div>
+  </div>
+  <div class="card" style="margin-top:12px;">
+    <h3>Tài sản theo thời gian</h3>
+    <div class="svgbox" id="chartBox"></div>
+    <details class="hint" style="margin:8px 0 2px;"><summary>Đọc màu đường và chấm viền</summary><p>Màu đoạn là tài sản rút nhiều nhất để chi; nếu không rút thì là nguồn thu lớn nhất. Tiền MMF đã dùng để chi mang màu tài sản từng bán nạp vào đó. Chấm viền cho biết tài sản bán nạp MMF trong tháng. Bán để mua nhóm khác không tính là nguồn chi.</p></details>
+    <div class="legend" id="srcLegend"></div>
+    <div class="legend">
+      <span style="color:#64748b;font-weight:700">╌╌ Giá trị thực (trừ lạm phát)</span>
+      <span style="color:#92400e;font-weight:700">╌╌ Nếu gửi tiết kiệm 100%</span>
+      <span><i style="background:#059669;width:3px;height:13px;border-radius:1px"></i>&nbsp;tuổi nghỉ hưu</span>
+      <span style="color:#059669;font-weight:700">▲ sự kiện thu</span>
+      <span style="color:#dc2626;font-weight:700">▼ sự kiện chi</span>
+    </div>
+    <div class="hint">Đường 100% tiết kiệm giả định toàn bộ NAV ban đầu thành tiền gửi; không còn BĐS, tiền thuê hoặc tiền bán BĐS về sau.</div>
+  </div>
+  <div class="card">
+    <h3>Giá trị từng nhóm tài sản</h3>
+    <div class="svgbox" id="allocChartBox"></div>
+    <!-- Màu 6 nhóm tài sản — đồng bộ thủ công với ASSET_COLORS trong script (một bảng màu chung cho mọi biểu đồ) -->
+    <div class="legend">
+      <span><i style="background:#2563eb"></i>Quỹ MMF</span>
+      <span><i style="background:#059669"></i>Tiết kiệm</span>
+      <span><i style="background:#7c3aed"></i>Quỹ Trái phiếu</span>
+      <span><i style="background:#ea580c"></i>Quỹ Cổ phiếu/ETF</span>
+      <span><i style="background:#eab308"></i>Vàng</span>
+      <span><i style="background:#92400e"></i>Bất động sản</span>
+      <span><i style="background:#1e293b;width:9px;height:3px;border-radius:1px;"></i>&nbsp;Tổng</span>
+    </div>
+    <div class="hint">Mỗi điểm = giá trị nhóm ở cuối tháng (tiết kiệm gồm gốc và lãi tạm tính; vàng theo giá bán lại). Di chuột lên biểu đồ để xem chi tiết từng tháng.</div>
+  </div>
+  <div class="card">
+    <h3>Kế hoạch theo năm</h3>
+    <div class="hint" style="margin:-2px 0 8px;">Bấm mũi tên trước năm để xem từng tháng: thu → chi → nguồn chi → bán/mua. Ngoài kỳ cân bằng chỉ bán khi cần trả chi hoặc MMF xuống dưới nửa mốc; khoản thu mới còn lại có thể đem đầu tư sau khi giữ tiền cho chi lớn sắp tới. Tiền chưa mua được vàng giữ trong MMF đến kỳ xem xét tiếp. Mốc MMF = số tháng chọn ở Tab 5 × chi thường xuyên tháng đó. Số tiền tương lai là kịch bản; trước khi làm theo, đối chiếu số dư, giá và phí giao dịch thực tế.</div>
+    <div class="scroll" id="yearTableWrap"><table id="yearTable"></table></div>
+  </div>
+  <div class="bigmsg" id="concl">—</div>
+  <div class="foot">Phiên bản 1.1 — số liệu mang tính mô phỏng, kết luận chỉ đúng với kịch bản hiện tại.</div>
+</section>
+
+<!-- ============ TAB 8 — ĐÓNG TIẾP BHXH HAY GỬI TIẾT KIỆM ============ -->
+<section id="t8" class="tab">
+  <div class="tabMsg"></div>
+  <div class="card">
+    <h3>BHXH hay gửi tiết kiệm?</h3>
+    <p class="hint">Nếu gửi tiết kiệm thay vì đóng BHXH cùng số tiền, từ tuổi nào sổ tiết kiệm không còn đủ để chi bằng lương hưu? Đây là phép so dòng tiền: luôn tính mức đóng 22% như BHXH tự nguyện, chưa tính quyền lợi BHYT khi về hưu.</p>
+    <div class="row">
+      <div><label for="cmpPerson">Người được so sánh</label><select id="cmpPerson"></select></div>
+      <div><label for="cmpB">Mức thu nhập chọn đóng BHXH (đồng/tháng)</label><input type="text" inputmode="numeric" class="money" id="cmpB" value="20.000.000"></div>
+      <div><label for="cmpGrow">Mức thu nhập đóng các năm sau</label><select id="cmpGrow"><option value="infl">Tăng theo lạm phát giả định</option><option value="flat">Giữ nguyên số tiền</option></select></div>
+    </div>
+    <div class="cmp-summary" id="cmpProfile">—</div>
+  </div>
+  <div class="card">
+    <div class="cardheadrow"><h3>Tiết kiệm cạn từ tuổi nào?</h3>
+      <button type="button" class="btn mini" id="cmpYearsBtn">Tính tuổi cạn</button></div>
+    <p class="hint">Chọn các khoảng giả định, rồi xem từ tuổi nào sổ tiết kiệm cạn trong ít nhất tỷ lệ giả định đã chọn.</p>
+    <div class="cmp-settings">
+      <h4>Khoảng giả định (%/năm)</h4>
+      <div class="cmp-ranges">
+        <fieldset class="cmp-range"><legend>Lãi tiết kiệm</legend><div class="cmp-range-pair"><label for="cmpXMin">Từ<input type="number" id="cmpXMin" min="-10" max="30" step="0.25" value="4" aria-label="Lãi tiết kiệm từ"></label><label for="cmpXMax">Đến<input type="number" id="cmpXMax" min="-10" max="30" step="0.25" value="9" aria-label="Lãi tiết kiệm đến"></label></div></fieldset>
+        <fieldset class="cmp-range"><legend>Lạm phát</legend><div class="cmp-range-pair"><label for="cmpIMin">Từ<input type="number" id="cmpIMin" min="-10" max="30" step="0.25" value="3" aria-label="Lạm phát từ"></label><label for="cmpIMax">Đến<input type="number" id="cmpIMax" min="-10" max="30" step="0.25" value="7" aria-label="Lạm phát đến"></label></div></fieldset>
+        <fieldset class="cmp-range"><legend>Tăng lương hưu</legend><div class="cmp-range-pair"><label for="cmpYMin">Từ<input type="number" id="cmpYMin" min="-10" max="30" step="0.25" value="5" aria-label="Tăng lương hưu từ"></label><label for="cmpYMax">Đến<input type="number" id="cmpYMax" min="-10" max="30" step="0.25" value="10" aria-label="Tăng lương hưu đến"></label></div></fieldset>
+      </div>
+      <h4>Cách khảo sát</h4>
+      <div class="cmp-options">
+        <fieldset class="cmp-range"><legend>Tỷ lệ giả định sổ cạn</legend><label for="cmpWinThreshold">Ít nhất (%)<input type="number" id="cmpWinThreshold" min="1" max="100" step="1" value="70" aria-label="Ngưỡng tỷ lệ tổ hợp phần trăm"></label></fieldset>
+        <fieldset class="cmp-range"><legend>Bước khảo sát</legend><label for="cmpGridStep">Điểm % mỗi bước<select id="cmpGridStep"><option value="0.25">0,25</option><option value="0.5">0,5</option><option value="1">1</option></select></label></fieldset>
+      </div>
+      <p class="hint" id="cmpGridSummary">Sẽ tính 7.497 tổ hợp; mỗi tổ hợp có trọng số ngang nhau.</p>
+    </div>
+    <div id="cmpYearsOut"><p class="hint">Bấm “Tính tuổi cạn” để xem kết quả.</p></div>
+    <details class="hint"><summary>Cách tính</summary><p>Với mỗi số năm trong bảng, một bên đóng BHXH, bên kia gửi tiết kiệm đúng khoản tiền ấy theo từng tháng, tính cả lịch đã nhập ở Tab 3. Trước khi nghỉ hưu, sổ tiết kiệm chỉ sinh lãi. Từ lúc nhận hưu, mỗi tháng rút bằng toàn bộ lương hưu; số dư còn lại tiếp tục sinh lãi. Mốc cạn là tháng đầu tiên sổ không đủ tiền rút. Tiền BHXH đã đóng trong quá khứ chỉ được dùng để so giả định, không thể chuyển thành tiền tiết kiệm hôm nay.</p></details>
+  </div>
+  <div class="foot">Chưa định giá tử tuất và quyền lợi khi đóng dưới 15 năm BHXH.</div>
+</section>
+
+</main>
+
+<!-- Dialog thông báo của app (thay alert/confirm mặc định của trình duyệt) -->
+<div class="mmask" id="appModal">
+  <div class="modal" role="dialog" aria-modal="true">
+    <h4 id="amTitle">Thông báo</h4>
+    <div class="mbody" id="amBody"></div>
+    <div class="mbtns" id="amBtns"></div>
+  </div>
+</div>
+
+<script src="core/model.js"></script>
+<script src="core/pension.js"></script>
+<script src="core/compare.js?v=20261002-44"></script>
+<script src="core/simulation.js"></script>
+<script src="core/strategy.js"></script>
+<script src="core/series.js"></script>
+<script src="core/profiles.js"></script>
+<script src="state/defaults.js"></script>
+<script src="state/persist.js"></script>
+<script src="ui/common.js"></script>
+<script src="ui/setup.js"></script>
+<script src="ui/bhxh.js"></script>
+<script src="ui/investment.js"></script>
+<script src="ui/strategy.js"></script>
+<script src="ui/results.js"></script>
+<script src="ui/compare.js?v=20261002-45"></script>
+<script src="ui/profiles.js"></script>
+<script src="ui/app.js"></script>
+</body>
+</html>

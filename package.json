@@ -1,0 +1,15 @@
+{
+  "name": "lifehorizon",
+  "private": true,
+  "version": "1.1.0",
+  "description": "LifeHorizon - Dòng tiền cuộc đời — mô phỏng dòng tiền cả đời bằng VND; chạy LifeHorizon.bat hoặc npm run serve (Node thuần cho file tĩnh + API hồ sơ profile)",
+  "scripts": {
+    "start": "node app/server.js --open",
+    "serve": "node app/server.js",
+    "serve:static": "powershell -NoProfile -File app/_serve.ps1",
+    "syntax": "node app/test/_syntax.js",
+    "test": "node --test app/test/app.test.js",
+    "golden": "node app/test/golden-run.js compare audit/2026-10-03-cost-aware-rebalance/golden-v11.json",
+    "diagnostics": "node app/test/model-diagnostics.js"
+  }
+}
