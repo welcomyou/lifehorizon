@@ -14,7 +14,7 @@
     'core/series.js':['ensureSeries','regenerateSeries','riskCheck'],
     'state/defaults.js':['state','defaultState','NOW'],
     'state/persist.js':['saveState','loadState','migrateState'],
-    'ui/common.js':['$','appDialog','moneyVal','fmtTr','refreshList','bindDel','seedMoneyGood'],
+    'ui/common.js':['$','appDialog','moneyVal','fmtTr','refreshList','bindDel','seedMoneyGood','numVal','vnNumStr'],
     'ui/setup.js':['readInputs','renderTab1','renderPlots','renderMilestones','renderEvents','renderIncomePeriods'],
     'ui/bhxh.js':['renderPeopleTabs','renderPersonMeta','renderPensionDetails','renderFamilySummary','applyAutoPensionFor','writePensionInputs'],
     'ui/investment.js':['renderSeriesChart'],
@@ -35,7 +35,26 @@
 function renderNavBadges(vs){
   var counts={};
   vs.forEach(function(v){ if(v.level==='error'){ counts[v.tab]=(counts[v.tab]||0)+1; } });
-  document.querySelectorAll('nav button').forEach(function(b){
+  /* Ô số (class="num") — rời ô: hiển thị lại theo quy chuẩn VN (dấu , thập phân, dấu . nhóm ngàn
+   khi phần nguyên ≥ 10.000). Gõ được cả "6.5" lẫn "6,5"; chuỗi rỗng giữ nguyên (ô tùy chọn);
+   sai cú pháp giữ nguyên để banner validate hiển thị lỗi. Không chuẩn hóa TRONG lúc gõ để
+   không phá dấu , đang gõ dở (khác với ô tiền which tự định dạng tức thì). */
+document.addEventListener('focusout', function(ev){
+  var el = ev.target;
+  if(!el || !el.classList || !el.classList.contains('num')) return;
+  var t = String(el.value).trim();
+  if(t === '')return;
+  var v = numParseVN(t);
+  if(!isNaN(v)) el.value = vnNumStr(v);
+});
+/* Đ68 — chặn lăn chuột đổi giá trị: trình duyệt tự tăng/giảm ô number đang focus khi lăn chuột;
+   rời ô trước thì lăn chỉ cuộn trang. Toàn bộ ô nhập số đã chuyển sang type=text nên đây là
+   lưới an toàn cho số/type=number còn sót hoặc thêm về sau. */
+document.addEventListener('wheel', function(ev){
+  var a = document.activeElement;
+  if(a && a.tagName === 'INPUT' && a.type === 'number') a.blur();
+}, {passive:true});
+document.querySelectorAll('nav button').forEach(function(b){
     var old=b.querySelector('.ebadge'); if(old)old.remove();
     var nErr=counts[b.dataset.tab]||0; if(!nErr)return;
     var sp=document.createElement('span'); sp.className='ebadge'; sp.title=nErr+' lỗi dữ liệu ở tab này'; sp.textContent=nErr;
@@ -104,45 +123,50 @@ function refresh(){
 function writeInputs(){
   $('startMonth').value=('0'+(state.startMonth%12+1)).slice(-2)+'/'+Math.floor(state.startMonth/12);
   $('mainName').value=state.mainName||'';
-  $('birthYear').value=state.birthYear;$('gender').value=state.gender;$('simYears').value=state.simYears;$('infl').value=state.infl;
+  $('birthYear').value=vnNumStr(state.birthYear);$('gender').value=state.gender;$('simYears').value=vnNumStr(state.simYears);$('infl').value=vnNumStr(state.infl);
   ['mmf','tk','tp','cp'].forEach(function(k){$('a'+k.toUpperCase()).value=fmtMoney(state.assets[k]);});
-  $('goldChi').value=state.goldChi;$('goldPrice').value=fmtMoney(state.goldPrice);$('goldSpread').value=Math.round(state.goldSpread*100)/100;   /* làm tròn 2 chữ số — bản lưu cũ tính chênh lệch từ giá mua/bán có nhiễu float */
-  $('rMMF').value=state.rates.mmf;$('rTK').value=state.rates.tk;$('rTP').value=state.rates.tp;
-  $('rTKShort').value=state.rates.tkShort;$('rTKMedium').value=state.rates.tkMedium;
-  $('tpEarlyFee').value=state.rates.tpEarlyFee===undefined?2:state.rates.tpEarlyFee;
-  $('tpMinMonths').value=state.rates.tpMinMonths===undefined?12:state.rates.tpMinMonths;
-  $('cpBuyFee').value=state.rates.cpBuyFee||0;$('cpSellFee').value=state.rates.cpSellFee||0;
+  $('goldChi').value=vnNumStr(state.goldChi);$('goldPrice').value=fmtMoney(state.goldPrice);$('goldSpread').value=vnNumStr(Math.round(state.goldSpread*100)/100);   /* làm tròn 2 chữ số — bản lưu cũ tính chênh lệch từ giá mua/bán có nhiễu float */
+  $('rMMF').value=vnNumStr(state.rates.mmf);$('rTK').value=vnNumStr(state.rates.tk);$('rTP').value=vnNumStr(state.rates.tp);
+  $('rTKShort').value=vnNumStr(state.rates.tkShort);$('rTKMedium').value=vnNumStr(state.rates.tkMedium);
+  $('tpEarlyFee').value=vnNumStr(state.rates.tpEarlyFee===undefined?2:state.rates.tpEarlyFee);
+  $('tpMinMonths').value=vnNumStr(state.rates.tpMinMonths===undefined?12:state.rates.tpMinMonths);
+  $('cpBuyFee').value=vnNumStr(state.rates.cpBuyFee||0);$('cpSellFee').value=vnNumStr(state.rates.cpSellFee||0);
   $('sellRule').value=state.sellRule;
   if(typeof cmpWrite==='function')cmpWrite();   /* Tab 8 — Tối ưu đóng BHXH */
   writePensionInputs();
 }
 
-/* Ô tiền (class="money") — áp cho cả ô render động. Chính sách một mặt (S01):
-   - TRONG LÚC GÕ (R01): không định dạng lại ô. `dataset.good` CHỈ chứa dãy chữ số thuần của chuỗi
-     đang gõ hợp lệ (chữ số, có thể kèm dấu chấm phân nhóm / dấu chấm vừa gõ cuối chuỗi) — mọi giá trị
-     đọc từ good đều là số hữu hạn. Chuỗi có ký tự ngoài (chữ, dấu +, -, e, dấu phẩy thập phân) hoặc
-     dãy số quá 15 chữ số bị tô đỏ NGAY và KHÔNG đổi good (giữ giá trị hợp lệ trước đó — R02).
-     Nhóm phân nhóm đang gõ dở ('1.5', '10.0') cũng tô đỏ tạm; đủ 3 chữ số thì hết.
-   - RỜI Ô: chuỗi strict-hợp lệ → định dạng chấm ngàn; còn lại → khôi phục giá trị hợp lệ lúc vào ô.
-     KHÔNG diễn giải dãy số+dấu chấm thập phân thành số khác ('1.5' không bao giờ thành 15).
-   - `seedMoneyGood` gieo good từ state khi render nên lần sửa sai đầu vẫn giữ giá trị cũ. */
+/* Ô tiền (class="money") — áp cho cả ô render động. Chính sách TỰ ĐỊNH DẠNG (S03, 03/10/2026):
+   người dùng gõ KHÔNG cần quan tâm dấu chấm/phẩy phân nhóm — phần mềm tự đặt lại ngay khi gõ:
+   - TRONG LÚC GÕ: dấu chấm/phẩy/khoảng trắng bị bỏ qua (gõ sai vị trí cũng vậy), dãy chữ số còn lại
+     được viết lại thành dạng chuẩn có chấm ngàn (fmtMoney) và con trỏ trả về đúng vị trí chữ số
+     đang đứng. Xóa/sửa giữa chuỗi không còn làm nhóm lệch → ô đỏ → hoàn tác như bản cũ.
+   - Chuỗi còn ký tự khác chữ số (chữ, +, -, e…) hoặc quá 15 chữ số: tô đỏ NGAY và KHÔNG đổi good
+     (giữ giá trị hợp lệ trước đó — R02); rời ô hoàn tác về giá trị lúc vào ô.
+   - `dataset.good` CHỈ chứa dãy chữ số thuần của chuỗi hợp lệ — mọi giá trị đọc từ good là số hữu hạn.
+   - RỜI Ô: chuỗi luôn đã chuẩn → fmtMoney lần cuối; nhánh hoàn tác giữ làm lưới an toàn.
+   - moneyParse/moneyEditValue (ui/common.js) giữ nguyên làm tầng đọc/fallback — bộ test phụ thuộc. */
 document.addEventListener('input', function(ev){
   var el = ev.target;
   if(!el.classList || !el.classList.contains('money')) return;
-  var t = String(el.value).replace(/\s/g,'');
-  if(t === ''){ setMoneyBad(el, null); return; }
-  var digits = t.replace(/[^0-9]/g, '');
-  var hasForeign = /[^0-9.]/.test(t);
-  var strictOk = !isNaN(moneyParse(t));
-  var typingDot = /\.$/.test(t);
-  var tooLong = digits.length > 15;
-  if(hasForeign || tooLong){ setMoneyBad(el, hasForeign ? moneyErr(t) : 'Quá 15 chữ số — kiểm tra lại số tiền.'); return; }
-  if(strictOk || typingDot || /^[0-9]+$/.test(t) || !isNaN(moneyEditValue(t))){
-    setMoneyBad(el, null);
-    if(digits) el.dataset.good = digits;          // dãy chữ số thuần — mọi lệnh đọc đều ra số hữu hạn
-  } else {
-    setMoneyBad(el, moneyErr(t));                 // dạng thập phân/chưa hợp lệ — đỏ, KHÔNG đổi good
+  var raw = String(el.value);
+  var caret = (el.selectionStart !== null && el.selectionStart !== undefined) ? el.selectionStart : raw.length;
+  var digitsBefore = raw.slice(0, caret).replace(/[^0-9]/g, '').length;  /* neo con trỏ: số chữ số trước caret */
+  var stripped = raw.replace(/[.,\s]/g, '');            /* dấu phân nhóm người dùng gõ — phần mềm tự quản */
+  var digits = stripped.replace(/[^0-9]/g, '');
+  if(/[^0-9]/.test(stripped)){ setMoneyBad(el, moneyErr(raw)); return; } /* chữ/+/-/e… — đỏ, giữ good cũ */
+  if(digits.length > 15){ setMoneyBad(el, 'Quá 15 chữ số — kiểm tra lại số tiền.'); return; }
+  var formatted = digits ? fmtMoney(+digits) : '';
+  if(formatted !== raw){
+    el.value = formatted;
+    if(el.setSelectionRange){
+      var pos = 0, seen = 0;
+      while(pos < formatted.length && seen < digitsBefore){ if(/[0-9]/.test(formatted.charAt(pos))) seen++; pos++; }
+      try{ el.setSelectionRange(pos, pos); }catch(e){}
+    }
   }
+  setMoneyBad(el, null);
+  if(el.dataset) el.dataset.good = digits || '0';
 });
 document.addEventListener('focusin', function(ev){
   var el = ev.target;
@@ -167,15 +191,33 @@ document.addEventListener('focusout', function(ev){
   scheduleRefresh();
 });
 
+/* Bật tab — dùng chung cho nút nav (màn hình rộng) và dropdown chọn tab (điện thoại, ≤760px).
+   navSetTab chỉ đổi trạng thái active + đồng bộ dropdown; caller tự gọi refresh(). */
+function navSetTab(tab){
+  document.querySelectorAll('nav button').forEach(function(x){ x.classList.remove('active'); });
+  document.querySelectorAll('.tab').forEach(function(x){ x.classList.remove('active'); });
+  var nb = document.querySelector('nav button[data-tab="'+tab+'"]');
+  if(nb) nb.classList.add('active');
+  var sec = $(tab); if(sec) sec.classList.add('active');
+  var ns = $('navTabsSelect'); if(ns) ns.value = tab;
+}
 document.querySelectorAll('nav button').forEach(function(b){
-  b.onclick = function(){
-    document.querySelectorAll('nav button').forEach(function(x){ x.classList.remove('active'); });
-    document.querySelectorAll('.tab').forEach(function(x){ x.classList.remove('active'); });
-    b.classList.add('active'); $(b.dataset.tab).classList.add('active');
-    refresh();
-  };
+  b.onclick = function(){ navSetTab(b.dataset.tab); refresh(); };
 });
+/* Dropdown chọn tab trên màn hẹp — dựng sẵn option từ nút nav để không lệch tên khi sửa label */
+var navSel = $('navTabsSelect');
+if(navSel){
+  document.querySelectorAll('nav button[data-tab]').forEach(function(b){
+    var lab = '';
+    b.childNodes.forEach(function(n){ if(n.nodeType === 3) lab += n.textContent; });
+    var o = document.createElement('option');
+    o.value = b.dataset.tab; o.textContent = lab.trim();
+    navSel.appendChild(o);
+  });
+  navSel.onchange = function(){ navSetTab(navSel.value); refresh(); };
+}
 document.querySelectorAll('input, select').forEach(function(el){
+  if(el.id === 'navTabsSelect') return;   /* dropdown tab tự xử lý change phía trên */
   el.addEventListener('change', scheduleRefresh);
 });
 

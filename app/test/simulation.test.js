@@ -385,6 +385,20 @@ test('F04: giai đoạn BHXH trùng chỉ tính một lần; đóng sau tháng �
   // chỉ tháng đủ tuổi T1/2052 được tính (tháng làm việc cuối); 179 tháng sau đó là nghỉ muộn — ngoài phạm vi
   assert.equal(s3.months,1);assert.equal(s3.monthsAfterRetire,179);assert.ok(!s3.eligible);
 });
+test('periodAdjusted: quy lương từng giai đoạn về năm hưởng, giữ đúng dòng khi sắp xếp và bỏ tháng trùng',()=>{
+  let c=fresh(1),s=c.state;
+  s.birthYear=1990;s.gender='male';s.infl=0; // hưởng năm 2052; hệ số lịch sử giữ nguyên bảng 2026
+  s.periods=[
+    {from:'2024-01',to:'2025-12',type:'dn',bh:10e6,growth:10},
+    {from:'2011-01',to:'2011-12',type:'dn',bh:10e6,growth:0},
+    {from:'2011-01',to:'2011-12',type:'dn',bh:10e6,growth:0}
+  ];
+  let r=c.bhxhSummary();
+  near(r.periodAdjusted[0],(10e6*1.03+11e6)/2,.01); // tăng lương sau 12 tháng
+  near(r.periodAdjusted[1],10e6*1.65,.01);           // giữ vị trí dòng dù engine sắp xếp theo tháng
+  assert.equal(r.periodAdjusted[2],null);             // dòng bị trùng toàn bộ không có tháng hợp lệ
+  assert.equal(r.months,36);
+});
 test('F06: dòng đóng "đến nghỉ hưu" ổn định khi đổi số năm mô phỏng',()=>{
   let c=fresh(1);c.state.birthYear=1990;c.state.gender='male';
   c.state.periods=[{from:'2026-01',to:'',type:'dn',bh:10e6,growth:0}];
@@ -538,6 +552,107 @@ test('pensionFromPeriods: không tháng đóng hợp lệ (rỗng / toàn dòng 
   assert.strictEqual(c.pensionFromPeriods(),null);
   c.state.periods=[{from:'2052-01',to:'2066-12',type:'dn',bh:10e6,growth:0}];   // đóng sau nghỉ hưu
   assert.strictEqual(c.pensionFromPeriods(),null);
+});
+
+/* ===== Rút BHXH một lần — Điều 70 khoản 3–4 Luật 41/2024 (đợt 80): 1,5× trước 2014, 2× từ 2014,
+   năm lẻ trước 2014 GỘP vào giai đoạn từ 2014, tháng lẻ 1–6 = nửa năm / 7–11 = một năm,
+   chưa đủ 1 năm = 22% × lương × số tháng tối đa 2 × bình quân. fresh(): NOW=T1/2026, infl=0 →
+   hệ số điều chỉnh không phụ thuộc năm hưởng → so đếm được tháng bình quân. ===== */
+test('bhxhLumpSum: toàn từ 2014 đủ năm tròn — 2 tháng bình quân × số năm',()=>{
+  let c=fresh(1);c.state.birthYear=1990;c.state.gender='male';
+  c.state.periods=[{from:'2014-01',to:'2023-12',type:'dn',bh:10e6,growth:0}];   // 120 tháng
+  let r=c.bhxhLumpSum(),s=c.bhxhSummary();
+  assert.equal(r.ok,true);assert.equal(r.months,120);assert.equal(r.monthsPre,0);assert.equal(r.monthsPost,120);
+  assert.equal(r.monthlyCount,20);                                              // 10 năm × 2
+  near(r.amount,r.avg*20);assert.equal(r.underOneYear,false);
+  assert.equal(r.months,s.months);                                              // cùng phép đếm tháng
+});
+test('bhxhLumpSum: lẻ tháng từ 2014 — 123 tháng làm tròn thành 10,5 năm',()=>{
+  let c=fresh(1);c.state.birthYear=1990;c.state.gender='male';
+  c.state.periods=[{from:'2014-01',to:'2024-03',type:'dn',bh:10e6,growth:0}];   // 10 năm 3 tháng
+  let r=c.bhxhLumpSum();
+  assert.equal(r.monthlyCount,21);                                              // 2 × 10,5
+  near(r.amount,r.avg*21);
+});
+test('bhxhLumpSum: gộp năm lẻ trước 2014 vào giai đoạn từ 2014 (điểm a khoản 3)',()=>{
+  let c=fresh(1);c.state.birthYear=1990;c.state.gender='male';
+  // 9 tháng trước 2014 + 36 tháng từ 2014 = 45 tháng: pool = 45 → lẻ 9 tháng làm tròn thành 1 năm
+  // → 4 năm × 2 = 8 tháng bình quân (công thức cũ sai: 9/12×1,5 + 36/12×2 = 7,125)
+  c.state.periods=[{from:'2013-04',to:'2016-12',type:'dn',bh:10e6,growth:0}];
+  let r=c.bhxhLumpSum();
+  assert.equal(r.monthsPre,9);assert.equal(r.monthsPost,36);
+  assert.equal(r.split.poolMonths,45);assert.equal(r.split.yearsPre,0);assert.equal(r.split.yearsPool,4);
+  assert.equal(r.monthlyCount,8);
+  near(r.amount,r.avg*8);
+});
+test('bhxhLumpSum: chỉ có trước 2014 — phần lẻ làm tròn (khoản 6 Điều 5) nhưng vẫn hệ số 1,5',()=>{
+  let c=fresh(1);c.state.birthYear=1990;c.state.gender='male';
+  // 63 tháng trước 2014 (5 năm tròn + 3 tháng): 1,5×5 + 1,5×0,5 = 8,25 — KHÔNG phải 2×0,5 phần lẻ
+  c.state.periods=[{from:'2008-03',to:'2013-05',type:'dn',bh:10e6,growth:0}];
+  let r=c.bhxhLumpSum();
+  assert.equal(r.monthsPre,63);assert.equal(r.monthsPost,0);
+  assert.equal(r.split.yearsPre,5);assert.equal(r.split.yearsPool,0.5);assert.equal(r.split.poolRate,1.5);
+  assert.equal(r.monthlyCount,8.25);
+  near(r.amount,r.avg*8.25);
+});
+test('bhxhLumpSum: chưa đủ một năm — 22% × lương × số tháng, chặn tối đa 2 × bình quân',()=>{
+  let c=fresh(1);c.state.birthYear=1990;c.state.gender='male';
+  c.state.periods=[{from:'2025-02',to:'2025-12',type:'dn',bh:10e6,growth:0}];   // 11 tháng
+  let r=c.bhxhLumpSum();
+  assert.equal(r.underOneYear,true);assert.equal(r.capped,true);
+  near(r.paid22,11*10e6*0.22);                                                  // 24,2tr > 2×bq
+  near(r.amount,2*r.avg);near(r.avg,10e6,.01);                                  // bq 2025 hệ số 1
+  c.state.periods=[{from:'2025-07',to:'2025-12',type:'dn',bh:10e6,growth:0}];   // 6 tháng
+  r=c.bhxhLumpSum();
+  assert.equal(r.underOneYear,true);assert.equal(r.capped,false);
+  near(r.amount,6*10e6*0.22);                                                   // 13,2tr < 2×bq
+});
+test('bhxhLumpSum: infl=0 khớp bhxhSummary.lumpAmt; infl>0 hệ số theo NĂM RÚT thấp hơn năm hưu',()=>{
+  let c=fresh(1);c.state.birthYear=1990;c.state.gender='male';
+  c.state.periods=[{from:'2013-01',to:'2030-12',type:'dn',bh:10e6,growth:0}];
+  let r=c.bhxhLumpSum(),s=c.bhxhSummary();
+  near(r.amount,s.lumpAmt,.01);                                                 // infl=0 → cùng hệ số
+  c.state.infl=4;
+  r=c.bhxhLumpSum();s=c.bhxhSummary();
+  assert.ok(r.amount>0&&r.amount<s.lumpAmt,'năm rút 2032 < năm hưu 2052 → hệ số thấp hơn');
+  assert.equal(r.eligMonth,(2030*12+11)+13);                                    // T12/2030 chấm dứt → T1/2032 (Điều 14 NĐ 158/2025)
+});
+test('bhxhLumpSum: giai đoạn lỗi → không tính; chưa có tháng đóng → báo trống; dòng mở tính đến đủ tuổi',()=>{
+  let c=fresh(1);c.state.birthYear=1990;c.state.gender='male';
+  c.state.periods=[{from:'sai-định-dạng',to:'',type:'dn',bh:10e6,growth:0}];
+  let bad=c.bhxhLumpSum();
+  assert.equal(bad.ok,false);assert.equal(bad.reason,'invalid');
+  c.state.periods=[];
+  let empty=c.bhxhLumpSum();
+  assert.equal(empty.ok,false);assert.equal(empty.reason,'empty');
+  c.state.periods=[{from:'2024-01',to:'',type:'dn',bh:5e6,growth:0}];
+  let r=c.bhxhLumpSum();
+  assert.equal(r.ok,true);assert.equal(r.openRows,1);
+  assert.equal(r.eligMonth,2052*12+13);                                          // chấm dứt = tháng đủ tuổi + 12 tháng chờ → tháng 13
+  assert.equal(r.months,c.bhxhSummary().months);
+});
+test('bhxhLumpSum: lương/tăng lương không hợp lệ → không tính (không trả NaN); pensionFromPeriods cùng nguyên tắc',()=>{
+  let c=fresh(1);c.state.birthYear=1990;c.state.gender='male';
+  c.state.periods=[{from:'2024-01',to:'2024-06',type:'dn',bh:NaN,growth:0}];
+  let r=c.bhxhLumpSum();
+  assert.equal(r.ok,false);assert.equal(r.reason,'invalid');
+  assert.strictEqual(c.pensionFromPeriods(),null);
+  c.state.periods=[{from:'2024-01',to:'2024-06',type:'dn',bh:10e6,growth:500}];  // tăng lương ngoài -99..100
+  r=c.bhxhLumpSum();
+  assert.equal(r.ok,false);assert.equal(r.reason,'invalid');
+});
+test('bhxhLumpSum: tháng đóng SAU mốc đủ tuổi vẫn tính (Điều 70 theo thời gian đã đóng) — lương hưu thì không',()=>{
+  let c=fresh(1),s=c.state;
+  s.birthYear=1960;s.gender='male';                                              // đủ tuổi theo lộ trình T1/2020 (60 tuổi)
+  s.periods=[{from:'2020-01',to:'2025-12',type:'dn',bh:10e6,growth:0}];          // 72 tháng, chỉ T1/2020 trước mốc
+  let r=c.bhxhLumpSum(),sum=c.bhxhSummary();
+  assert.equal(r.ok,true);
+  assert.equal(r.months,72);                                                     // rút một lần: đủ 72 tháng
+  assert.equal(r.monthsPre,0);assert.equal(r.monthsPost,72);
+  assert.equal(r.monthlyCount,12);                                               // 6 năm × 2
+  near(r.amount,r.avg*12);
+  assert.equal(sum.months,1);                                                    // lương hưu: chỉ tính đến mốc đủ tuổi
+  assert.ok(sum.monthsAfterRetire>0);
 });
 
 /* ===== BHXH theo Luật 41/2024/QH15 + NĐ 158/159/2025 + TT 12/2025 + CV 340/BHXH (10/09/2026) =====

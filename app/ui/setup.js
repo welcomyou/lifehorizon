@@ -9,15 +9,15 @@ function readInputs(){
   if(isFinite(nextStart)&&isFinite(NOW)&&nextStart!==NOW&&state.lifePlan){var delta=nextStart-NOW;lifeRows(state.lifePlan).forEach(function(r){r.from+=delta;if(r.income)r.income.anchor+=delta;});}
   state.startMonth=nextStart; if(isFinite(state.startMonth))NOW=state.startMonth;
   state.mainName=$('mainName').value;   /* Đ7 — tên hiển thị người chính nhập ở Tab 1 (trước đây ô này nằm trong #personMeta Tab 3) */
-  state.birthYear=+$('birthYear').value;state.gender=$('gender').value;state.simYears=+$('simYears').value;
-  state.infl=+$('infl').value;
+  state.birthYear=numVal($('birthYear'));state.gender=$('gender').value;state.simYears=numVal($('simYears'));
+  state.infl=numVal($('infl'));
   state.assets={mmf:moneyVal($('aMMF')),tk:moneyVal($('aTK')),tp:moneyVal($('aTP')),cp:moneyVal($('aCP'))};
-  state.goldChi=+$('goldChi').value;
+  state.goldChi=numVal($('goldChi'));
   state.goldPrice=moneyVal($('goldPrice'));
-  state.goldSpread=+$('goldSpread').value;   /* chênh lệch % nhập ở Tab 6 · Lợi suất — giá bán lại tự tính, không nhập tay */
-  state.rates={mmf:+$('rMMF').value,tk:+$('rTK').value,tp:+$('rTP').value,tkShort:+$('rTKShort').value,tkMedium:+$('rTKMedium').value,
-    tpEarlyFee:+$('tpEarlyFee').value,tpMinMonths:+$('tpMinMonths').value,
-    cpBuyFee:+$('cpBuyFee').value,cpSellFee:+$('cpSellFee').value};
+  state.goldSpread=numVal($('goldSpread'));   /* chênh lệch % nhập ở Tab 6 · Lợi suất — giá bán lại tự tính, không nhập tay */
+  state.rates={mmf:numVal($('rMMF')),tk:numVal($('rTK')),tp:numVal($('rTP')),tkShort:numVal($('rTKShort')),tkMedium:numVal($('rTKMedium')),
+    tpEarlyFee:numVal($('tpEarlyFee')),tpMinMonths:numVal($('tpMinMonths')),
+    cpBuyFee:numVal($('cpBuyFee')),cpSellFee:numVal($('cpSellFee'))};
   state.sellRule=$('sellRule').value;
   state.pensionMode='simple';
   /* Hai giai đoạn (bàn giao 10/09/2026): không ghi đè cả object — giữ amountSource/amountBasis.
@@ -27,7 +27,7 @@ function readInputs(){
   var own=activePersonObj(), src=own?own.pension:state.pensionSimple;
   var pensionNext={
     amount:src.amountSource==='fromPeriods'?src.amount:moneyVal($('psAmount')),
-    startYear:+$('psStart').value,startMonth:+$('psMonth').value,growth:+$('psGrowth').value,
+    startYear:numVal($('psStart')),startMonth:numVal($('psMonth')),growth:numVal($('psGrowth')),
     amountSource:src.amountSource||'manual',amountBasis:src.amountBasis||'baseMonth'
   };
   if(own)own.pension=pensionNext;else state.pensionSimple=pensionNext;
@@ -97,16 +97,16 @@ function renderTab1(s){
   }
   /* Tổng tài sản hiện tại (gồm vàng & BĐS đang sở hữu) + xem trước tiền thuê; BĐS có năm sở hữu
      trong tương lai được tách riêng "chờ nhận" vì chưa nằm trong tài sản hôm nay. */
-  var landV = 0, areaV = 0, rentPrev = 0, pending = 0;
+  var landV = 0, rentPrev = 0, pending = 0;
   state.landPlots.forEach(function(p){
     if(plotOwnIdx(p)>0){pending+=plotValue(p);return;}
-    landV += plotValue(p); areaV += p.area;
+    landV += plotValue(p);
     if(p.rent&&plotRentIdx(p)===0) rentPrev += (+p.rentVnd||0);   /* BĐS "thuê từ năm" tương lai chưa có dòng tiền hôm nay */
   });
   var tot = state.assets.mmf + state.assets.tk + state.assets.tp + state.assets.cp + state.goldChi*goldBid(state.goldPrice) + landV;
   $('assetTotal').innerHTML = 'Tổng tài sản hiện tại: <b>'+fmtTr(tot)+'</b>'+
-    (areaV > 0 ? ' · BĐS '+fmtNumVN(areaV,0)+' m² = '+fmtTr(landV) : '')+
-    (rentPrev > 0 ? ' · thuê BĐS dự kiến '+fmtTr(rentPrev)+'/tháng' : '')+
+    (landV > 0 ? ' · BĐS: '+fmtTr(landV) : '')+
+    (rentPrev > 0 ? ' · Tiền thuê: '+fmtTr(rentPrev)+'/tháng' : '')+
     (pending > 0 ? ' · chờ nhận thêm '+fmtTr(pending)+' (giá hiện tại, theo Năm sở hữu ở Tab 2)' : '');
 }
 function renderAssetLabels(){
@@ -114,13 +114,13 @@ function renderAssetLabels(){
   state.landPlots.forEach(function(p){ if(plotOwnIdx(p)===0) landV += plotValue(p); });
   var g = (state.goldChi||0)*goldBid(state.goldPrice||0);
   var tot = state.assets.mmf + state.assets.tk + state.assets.tp + state.assets.cp + g + landV;
-  $('aTitle').innerHTML = 'Tài sản thanh khoản cao ban đầu — tổng '+fmtTr(tot-g-landV);
+  $('aTitle').innerHTML = 'Tiền, quỹ và vàng ban đầu — tổng '+fmtTr(tot-landV);
   $('lbMMF').textContent = 'Quỹ MMF';
   $('lbTK').textContent  = 'Tiết kiệm';
   $('lbTP').textContent  = 'Quỹ Trái phiếu';
   $('lbCP').textContent  = 'Quỹ Cổ phiếu/ETF';
   $('lbGold').textContent = 'Vàng — số chỉ';
-  $('goldSellNote').innerHTML='Giá bán lại ước tính: <b>'+fmtMoney(goldBid(state.goldPrice))+'</b> đ/chỉ (chênh lệch chỉnh ở Tab 6).';
+  $('goldSellNote').innerHTML='Giá bán vàng ước tính: <b>'+fmtMoney(goldBid(state.goldPrice))+'</b> đ/chỉ · chỉnh chênh lệch mua–bán ở Tab 6.';
 }
 var PCOLORS=['pc0','pc1','pc2','pc3','pc4','pc5','pc6','pc7'];
 function renderPlots(){
@@ -134,29 +134,28 @@ function renderPlots(){
     var k=plotOwnIdx(p)/12;
     var totFv=plotValue(p)*Math.pow(1+state.infl/100,k);
     var saleFv=(p.salePrice!=null&&p.saleYear!=null)?p.salePrice*Math.pow(1+state.infl/100,(p.saleYear*12+11-NOW)/12):0;
-    var expH='<div class="pexprow head"><div>Năm</div><div>Nội dung</div><div>Số tiền (giá hiện tại)</div><div></div></div>';
+    var expH=(p.expenses||[]).length?'<div class="pexprow head"><div>Năm</div><div>Nội dung</div><div>Số tiền (giá hiện tại)</div><div></div></div>':'<div class="hint" style="margin:2px 0 4px;">Chưa có khoản nào.</div>';
     (p.expenses||[]).forEach(function(x,ei){
       var xf=(x.amount||0)*Math.pow(1+state.infl/100,(x.y*12+11-NOW)/12);
       expH+='<div class="pexprow" data-o="'+objToken(x)+'">'+
-        '<div><input type="number" aria-label="Năm chi phí BĐS '+(i+1)+'" value="'+x.y+'" min="1900" max="2200" data-f="expY" data-i="'+i+'" data-ei="'+ei+'" title="Phát sinh cuối tháng 12 năm này'+(xf>0?' — ≈ '+fmtTr(xf)+' giá trị tương lai':'')+'"></div>'+
-        '<div><input type="text" aria-label="Nội dung chi phí BĐS '+(i+1)+'" value="'+esc(x.label||'')+'" placeholder="sửa chữa, duy tu, bảo trì, đầu tư thêm…" data-f="expL" data-i="'+i+'" data-ei="'+ei+'"></div>'+
-        '<div><input type="text" inputmode="numeric" class="money" aria-label="Số tiền chi phí BĐS '+(i+1)+'" value="'+fmtMoney(x.amount||0)+'" data-f="expA" data-i="'+i+'" data-ei="'+ei+'" title="Theo giá hiện tại'+(xf>0?' — ≈ '+fmtTr(xf)+' khi phát sinh':'')+'"></div>'+
+        '<div><span class="pexp-mobile-label">Năm</span><input type="text" inputmode="numeric" class="num" aria-label="Năm chi phí BĐS '+(i+1)+'" value="'+x.y+'" data-f="expY" data-i="'+i+'" data-ei="'+ei+'" title="Phát sinh cuối tháng 12 năm này'+(xf>0?' — ≈ '+fmtTr(xf)+' giá trị tương lai':'')+'"></div>'+
+        '<div><span class="pexp-mobile-label">Nội dung</span><input type="text" aria-label="Nội dung chi phí BĐS '+(i+1)+'" value="'+esc(x.label||'')+'" placeholder="Ví dụ: sửa chữa" data-f="expL" data-i="'+i+'" data-ei="'+ei+'"></div>'+
+        '<div><span class="pexp-mobile-label">Số tiền (giá hiện tại)</span><input type="text" inputmode="numeric" class="money" aria-label="Số tiền chi phí BĐS '+(i+1)+'" value="'+fmtMoney(x.amount||0)+'" data-f="expA" data-i="'+i+'" data-ei="'+ei+'" title="Theo giá hiện tại'+(xf>0?' — ≈ '+fmtTr(xf)+' khi phát sinh':'')+'"></div>'+
         '<div><button class="del" data-f="expDel" data-i="'+i+'" data-ei="'+ei+'" aria-label="Xóa hạng mục chi phí '+(ei+1)+' của BĐS '+(i+1)+'">✕</button></div></div>';
     });
-    if(!(p.expenses||[]).length)expH+='<div class="hint" style="margin:2px 0 4px;">Chưa có hạng mục — bấm ＋ Thêm hạng mục để thêm sửa chữa, duy tu, bảo trì hay khoản đầu tư thêm cho BĐS này.</div>';
     h+='<div class="property-card '+(PCOLORS[i%PCOLORS.length])+'" data-o="'+objToken(p)+'">'+
       '<div class="prow1"><div><label>Tên bất động sản</label><input aria-label="Tên BĐS '+(i+1)+'" value="'+esc(p.label)+'" data-f="label" data-i="'+i+'"></div>'+
-      '<label class="pchk" style="margin:0 0 4px;" title="Chỉ các BĐS được đánh dấu mới bị bán sớm khi mọi tài sản thanh khoản đã hết; BĐS hẹn bán theo Năm bán vẫn bán đúng lịch."><input type="checkbox"'+(p.sellable===false?'':' checked')+' data-f="sellable" data-i="'+i+'">Có thể bán</label>'+
+      '<label class="pchk" style="margin:0 0 4px;" title="Cho phép bán sớm khi tài sản thanh khoản cạn. Năm bán đã nhập vẫn được thực hiện."><input type="checkbox"'+(p.sellable===false?'':' checked')+' data-f="sellable" data-i="'+i+'">Có thể bán</label>'+
       '<button class="del" data-i="'+i+'" aria-label="Xóa BĐS '+(i+1)+'">✕</button></div>'+
-      '<div class="row"><div><label>Diện tích m²</label><input type="number" aria-label="Diện tích BĐS '+(i+1)+'" value="'+p.area+'" data-f="area" data-i="'+i+'"></div>'+
-      '<div><label>Năm sở hữu</label><input type="number" aria-label="Năm sở hữu BĐS '+(i+1)+'" value="'+(p.ownYear==null?'':p.ownYear)+'" placeholder="Đã có" min="1900" max="2200" data-f="ownYear" data-i="'+i+'" title="BĐS nhận sau này (thừa kế, tặng cho, mua…): trống = đã có từ hôm nay. Trước năm sở hữu BĐS chưa nằm trong tài sản, chưa cho thuê, chưa phát sinh chi phí và không bán được."></div>'+
-      '<div><label>Giá trị (giá hiện tại)</label><input class="money" inputmode="numeric" aria-label="Giá trị BĐS '+(i+1)+'" value="'+fmtMoney(plotValue(p))+'" data-f="total" data-i="'+i+'" title="Theo giá hiện tại'+(k>0?' — quy đổi ≈ '+fmtTr(totFv)+' tại năm bắt đầu sở hữu (đã gồm lạm phát '+state.infl+'%/năm)':'')+'. Sau đó giá đi theo chuỗi BĐS ở Tab 6."></div></div>'+
-      '<div class="row"><label class="pchk" style="margin:0 0 4px;"><input type="checkbox"'+(p.rent?' checked':'')+' data-f="rent" data-i="'+i+'">Cho thuê</label>'+
-      '<div><label>Giá thuê/tháng</label><input type="text" inputmode="numeric" class="money" aria-label="Giá thuê BĐS '+(i+1)+'" value="'+fmtMoney(p.rentVnd||0)+'" placeholder="đ/tháng"'+dis+' data-f="rentVnd" data-i="'+i+'" title="Tiền thuê ròng theo giá hiện tại — mô phỏng tự nhân lạm phát tới tháng bắt đầu thuê rồi tăng theo Tăng thuê %/năm từ đó. Nhận đến hết tháng bán."></div>'+
-      '<div><label>Tăng thuê %/năm</label><input type="number" value="'+(p.rentGrowth===undefined?2:p.rentGrowth)+'" step="0.5"'+dis+' data-f="rentGrowth" data-i="'+i+'"></div>'+
-      '<div><label>Thuê từ năm</label><input type="number" aria-label="Năm bắt đầu cho thuê BĐS '+(i+1)+'" value="'+(p.rentFromYear==null?'':p.rentFromYear)+'" placeholder="Ngay khi có BĐS" min="1900" max="2200"'+dis+' data-f="rentFromYear" data-i="'+i+'" title="Trống = cho thuê ngay từ năm sở hữu. Nhập năm (vd nhà tự ở đến 2035 mới cho thuê): trước năm này chưa có tiền thuê; nhập trước năm sở hữu được coi như thuê ngay khi có BĐS."></div>'+
-      '<div><label>Năm bán</label><input type="number" aria-label="Năm bán BĐS '+(i+1)+'" value="'+(p.saleYear===null?'':p.saleYear)+'" placeholder="Không hẹn bán" data-f="saleYear" data-i="'+i+'" title="Bán nguyên BĐS vào cuối tháng 12 của năm này — tháng bán vẫn nhận đủ tiền thuê, từ tháng sau hết hẳn. Trống = không hẹn bán (vẫn có thể bán sớm nếu đánh dấu Có thể bán)."></div>'+
-      '<div><label>Giá bán (giá hiện tại)</label><input class="money" inputmode="numeric" aria-label="Giá bán BĐS '+(i+1)+'" value="'+(p.salePrice===null?'':fmtMoney(p.salePrice))+'" placeholder="Theo giá mô phỏng" data-f="salePrice" data-i="'+i+'" title="Giá bán theo giá hiện tại — mô phỏng tự nhân lạm phát tới tháng bán'+(saleFv>0?' (≈ '+fmtTr(saleFv)+' lúc bán)':'')+'. Trống = bán theo giá mô phỏng tại tháng bán."></div></div>'+
+      '<div class="row property-values"><div><label>Diện tích m²</label><input type="text" inputmode="decimal" class="num" aria-label="Diện tích BĐS '+(i+1)+'" value="'+vnNumStr(p.area)+'" data-f="area" data-i="'+i+'"></div>'+
+      '<div><label>Năm sở hữu</label><input type="text" inputmode="numeric" class="num" aria-label="Năm sở hữu BĐS '+(i+1)+'" value="'+(p.ownYear==null?'':p.ownYear)+'" placeholder="Đã có" data-f="ownYear" data-i="'+i+'" title="Để trống nếu đã có. Trước năm sở hữu chưa tính tài sản, tiền thuê hay chi phí."></div>'+
+      '<div><label>Giá trị (giá hiện tại)</label><input class="money" inputmode="numeric" aria-label="Giá trị BĐS '+(i+1)+'" value="'+fmtMoney(plotValue(p))+'" data-f="total" data-i="'+i+'" title="Theo giá hiện tại'+(k>0?' — quy đổi ≈ '+fmtTr(totFv)+' tại năm bắt đầu sở hữu (đã gồm lạm phát '+vnNumStr(state.infl)+'%/năm)':'')+'. Sau đó giá đi theo chuỗi BĐS ở Tab 6."></div></div>'+
+      '<div class="row property-rent"><label class="pchk" style="margin:0 0 4px;"><input type="checkbox"'+(p.rent?' checked':'')+' data-f="rent" data-i="'+i+'">Cho thuê</label>'+
+      '<div><label>Giá thuê/tháng</label><input type="text" inputmode="numeric" class="money" aria-label="Giá thuê BĐS '+(i+1)+'" value="'+fmtMoney(p.rentVnd||0)+'" placeholder="đ/tháng"'+dis+' data-f="rentVnd" data-i="'+i+'" title="Tiền thuê ròng theo giá hôm nay; tăng theo lạm phát đến khi cho thuê, sau đó theo Tăng thuê %/năm."></div>'+
+      '<div><label>Tăng thuê %/năm</label><input type="text" inputmode="decimal" class="num" value="'+vnNumStr(p.rentGrowth===undefined?2:p.rentGrowth)+'"'+dis+' data-f="rentGrowth" data-i="'+i+'"></div>'+
+      '<div><label>Thuê từ năm</label><input type="text" inputmode="numeric" class="num" aria-label="Năm bắt đầu cho thuê BĐS '+(i+1)+'" value="'+(p.rentFromYear==null?'':p.rentFromYear)+'" placeholder="Ngay khi có BĐS"'+dis+' data-f="rentFromYear" data-i="'+i+'" title="Để trống nếu cho thuê ngay khi sở hữu; trước đó chưa có tiền thuê."></div>'+
+      '<div><label>Năm bán</label><input type="text" inputmode="numeric" class="num" aria-label="Năm bán BĐS '+(i+1)+'" value="'+(p.saleYear===null?'':p.saleYear)+'" placeholder="Không hẹn bán" data-f="saleYear" data-i="'+i+'" title="Bán cuối tháng 12; tiền thuê dừng từ tháng sau. Để trống nếu chưa hẹn bán."></div>'+
+      '<div><label>Giá bán (giá hiện tại)</label><input class="money" inputmode="numeric" aria-label="Giá bán BĐS '+(i+1)+'" value="'+(p.salePrice===null?'':fmtMoney(p.salePrice))+'" data-f="salePrice" data-i="'+i+'" title="Giá bán theo giá hiện tại — mô phỏng tự nhân lạm phát tới tháng bán'+(saleFv>0?' (≈ '+fmtTr(saleFv)+' lúc bán)':'')+'. Để trống: bán theo giá mô phỏng tại tháng bán."></div></div>'+
       '<div class="pexp"><div class="pexpt">Chi phí sửa chữa, duy tu, bảo trì, đầu tư thêm</div><div class="pexpwrap">'+expH+'</div>'+
       '<button class="btn mini ghost" data-f="addExp" data-i="'+i+'">＋ Thêm hạng mục</button></div></div>';
   });
@@ -178,18 +177,18 @@ function renderPlots(){
         if(el.dataset.ei!==undefined)x=(p.expenses||[])[+el.dataset.ei];
         if(f==='label')p.label=el.value;
         else if(f==='sellable')p.sellable=el.checked;
-        else if(f==='ownYear')p.ownYear=el.value===''?null:+el.value;
-        else if(f==='saleYear')p.saleYear=el.value===''?null:+el.value;
+        else if(f==='ownYear')p.ownYear=el.value===''?null:numParseVN(el.value);
+        else if(f==='saleYear')p.saleYear=el.value===''?null:numParseVN(el.value);
         else if(f==='salePrice')p.salePrice=el.value===''?null:moneyVal(el);
         else if(f==='total')p.total=moneyVal(el);
         else if(f==='rent')p.rent=el.checked;
         else if(f==='rentVnd')p.rentVnd=moneyVal(el);
-        else if(f==='rentFromYear')p.rentFromYear=el.value===''?null:+el.value;
-        else if(f==='rentGrowth')p.rentGrowth=+el.value||0;
-        else if(f==='expY'){if(x){x.y=+el.value;p.expenses.sort(function(a,b){return a.y-b.y;});}}
+        else if(f==='rentFromYear')p.rentFromYear=el.value===''?null:numParseVN(el.value);
+        else if(f==='rentGrowth')p.rentGrowth=numVal(el)||0;
+        else if(f==='expY'){if(x){x.y=numVal(el);p.expenses.sort(function(a,b){return a.y-b.y;});}}
         else if(f==='expL'){if(x)x.label=el.value;}
         else if(f==='expA'){if(x)x.amount=moneyVal(el);}
-        else p.area=+el.value;   /* diện tích — chỉ còn tham khảo, giá trị là ô Giá trị */
+        else p.area=numVal(el);   /* diện tích — chỉ còn tham khảo, giá trị là ô Giá trị */
         scheduleRefresh();
       };
     });
@@ -227,27 +226,30 @@ function renderMilestones(){
   renderMilestoneBox('fmsList', function(){return state.fixedMilestones;}, false);
 }
 function renderMilestoneBox(boxId, getList, anchorLock){
-  /* Dòng mốc chi dùng .msrow riêng (không phải .erow của sự kiện): cột tiền cố định vừa 1 tỷ,
-     thêm cột Năm CHỈ ĐỌC — năm dương lịch của tháng kỷ niệm NOW+12*y, đổi tháng gốc tự vẽ lại. */
-  var list = getList(), moneyHead = anchorLock ? 'Chi phí mỗi tháng (giá hiện tại)' : 'Chi phí mỗi tháng (số tiền thực trả)',
-      moneyTip = anchorLock ? 'Chuẩn hoá theo lạm phát mỗi năm kỷ niệm' : 'Số tiền thực trả, giữ nguyên đến mốc kế — không quy đổi theo lạm phát';
-  var h = '<div class="msrow head"><div>Năm thứ</div><div>Năm</div><div>Giai đoạn</div><div>'+moneyHead+'</div><div></div></div>';
+  /* Cột tương lai của chi tiêu theo lạm phát = mức nhập theo giá hiện tại × (1+lạm phát)^năm thứ.
+     Chi phí cố định giữ nguyên số tiền thực trả và không có cột quy đổi. */
+  var list = getList(), moneyHead = anchorLock ? 'Chi phí mỗi tháng (hiện tại)' : 'Chi phí mỗi tháng (số tiền thực trả)',
+      moneyTip = anchorLock ? 'Nhập theo giá hiện tại; lạm phát tính từ tháng bắt đầu mô phỏng' : 'Số tiền thực trả, giữ nguyên đến mốc kế';
+  var rowClass=anchorLock?' expense-growth-row':'',futureHead=anchorLock?'<div>Chi phí mỗi tháng (tương lai)</div>':'';
+  var h = '<div class="msrow head'+rowClass+'"><div>Năm thứ</div><div>Năm</div><div>Giai đoạn</div><div>'+moneyHead+'</div>'+futureHead+'<div></div></div>';
   list.forEach(function(ms, i){
     var calY = Math.floor((NOW+12*ms.y)/12), apFrom = ymToStr(NOW+12*ms.y);
-    h += '<div class="msrow" data-o="'+objToken(ms)+'"><div><input type="number" value="'+ms.y+'" data-k="m" data-i="'+i+'" min="0" title="Mốc năm thứ '+ms.y+' áp dụng từ '+apFrom+' (năm thứ tính từ tháng gốc)"></div>'+
+    var futureCell=anchorLock?'<div><input type="text" class="ms-future-value" value="'+fmtMoney(ms.monthly*Math.pow(1+state.infl/100,ms.y))+'" aria-label="Chi phí tháng tại năm thứ '+ms.y+' đã cộng lạm phát" disabled tabindex="-1"></div>':'';
+    h += '<div class="msrow'+rowClass+'" data-o="'+objToken(ms)+'"><div><input type="text" inputmode="numeric" class="num" value="'+ms.y+'" data-k="m" data-i="'+i+'" title="Mốc năm thứ '+ms.y+' áp dụng từ '+apFrom+' (năm thứ tính từ tháng gốc)"></div>'+
       '<div class="cyear" title="Năm thứ '+ms.y+' bắt đầu áp dụng từ '+apFrom+' — tính theo tháng gốc, không sửa được">'+calY+'</div>'+
       '<div><input type="text" value="'+esc(ms.label||'')+'" placeholder="tên mốc" data-k="ml" data-i="'+i+'"></div>'+
       '<div><input type="text" inputmode="numeric" class="money" value="'+fmtMoney(ms.monthly)+'" data-k="mm" data-i="'+i+'" title="'+moneyTip+'"></div>'+
+      futureCell+
       '<div><button class="del" data-k="mdel" data-i="'+i+'" aria-label="Xóa mốc chi '+(i+1)+'">✕</button></div></div>';
   });
   refreshList(boxId, h, function(box){
-    box.querySelectorAll('input').forEach(function(el){
+    box.querySelectorAll('input:not(:disabled)').forEach(function(el){
       var ms = getList()[+el.dataset.i];   /* R03: danh tính lúc gắn — đổi năm sắp xếp lại danh sách */
       if(!ms) return;
       el.addEventListener('change', function(){
         var arr = getList();
         if(arr.indexOf(ms) < 0) return;
-        if(el.dataset.k==='m'){ ms.y = +el.value; arr.sort(function(a,b){ return a.y-b.y; }); }
+        if(el.dataset.k==='m'){ ms.y = numVal(el); arr.sort(function(a,b){ return a.y-b.y; }); }
         else if(el.dataset.k==='ml') ms.label = el.value;
         else if(el.dataset.k==='mm') ms.monthly = moneyVal(el);
         scheduleRefresh();
@@ -266,26 +268,28 @@ function renderMilestoneBox(boxId, getList, anchorLock){
 }
 /* kind = 'chi' (Tab 4) hoặc 'thu' (Tab 5) */
 function renderEvents(kind, boxId){
-  var h = '<div class="erow head"><div>Năm thứ</div><div>Tên sự kiện</div><div>Số tiền (giá hiện tại)</div><div></div></div>';
+  var isExpense=kind==='chi';
+  var whenLabel=isExpense?'Số tiền lúc chi':'Số tiền lúc thu';
+  var h = '<div class="erow head event-value-row"><div>Năm thứ</div><div>Tên sự kiện</div><div>Số tiền (giá hiện tại)</div><div>'+whenLabel+'</div><div></div></div>';
   state.events.forEach(function(e, i){
     if(e.kind !== kind) return;
     var fv = e.amount * Math.pow(1+state.infl/100, e.y);
     h += '<div data-o="'+objToken(e)+'">';   /* S02 — wrapper giữ định danh đối tượng qua các lần sort */
-    h += '<div class="erow"><div><input type="number" value="'+e.y+'" data-k="e" data-i="'+i+'" min="0" title="Xảy ra cuối tháng '+ymToStr(NOW+Math.round(e.y*12))+'"></div>'+
-      '<div><input type="text" value="'+esc(e.label||'')+'" placeholder="tên" data-k="el" data-i="'+i+'"></div>'+
-      '<div><input type="text" inputmode="numeric" class="money" value="'+fmtMoney(e.amount)+'" data-k="ea" data-i="'+i+'" title="giá trị tương lai: '+fmtTr(fv)+'"></div>'+
+    h += '<div class="erow event-value-row"><div><span class="event-mobile-label">Năm thứ</span><input type="text" inputmode="numeric" class="num" value="'+e.y+'" data-k="e" data-i="'+i+'" title="Xảy ra cuối tháng '+ymToStr(NOW+Math.round(e.y*12))+'"></div>'+
+      '<div><span class="event-mobile-label">Tên sự kiện</span><input type="text" value="'+esc(e.label||'')+'" placeholder="tên" data-k="el" data-i="'+i+'"></div>'+
+      '<div><span class="event-mobile-label">Số tiền (giá hiện tại)</span><input type="text" inputmode="numeric" class="money" value="'+fmtMoney(e.amount)+'" data-k="ea" data-i="'+i+'"></div>'+
+      '<div><span class="event-mobile-label">'+whenLabel+'</span><input type="text" class="event-future-value" value="'+fmtMoney(fv)+'" aria-label="'+whenLabel+' đã cộng lạm phát" disabled tabindex="-1"></div>'+
       '<div><button class="del" data-k="edel" data-i="'+i+'" aria-label="Xóa sự kiện '+(i+1)+'">✕</button></div></div>';
-    h += '<div class="erow" style="background:#fff;border:none;padding:0 8px 2px;margin-bottom:8px;"><div></div><div class="hint" style="margin:0;">→ '+fmtTr(fv)+' (giá tương lai)</div><div></div><div></div></div>';
     h += '</div>';   /* đóng wrapper data-o */
   });
   refreshList(boxId, h, function(box){
-    box.querySelectorAll('input, select').forEach(function(el){
+    box.querySelectorAll('input:not(:disabled), select').forEach(function(el){
       var ev0 = state.events[+el.dataset.i];   /* R03: danh tính lúc gắn — đổi năm sắp xếp lại danh sách */
       if(!ev0) return;
       el.addEventListener('change', function(){
         if(state.events.indexOf(ev0) < 0) return;
         var v = el.value;
-        if(el.dataset.k==='e'){ ev0.y = +v; state.events.sort(function(a,b){ return a.y-b.y; }); }
+        if(el.dataset.k==='e'){ ev0.y = numParseVN(v); state.events.sort(function(a,b){ return a.y-b.y; }); }
         else if(el.dataset.k==='el') ev0.label = v;
         else if(el.dataset.k==='ea') ev0.amount = moneyVal(el);
         scheduleRefresh();

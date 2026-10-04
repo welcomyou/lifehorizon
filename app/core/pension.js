@@ -98,7 +98,7 @@ function parseYM(s){
 
 function periodsChrono(periods){
   periods = periods || state.periods;
-  return periods.map(function(p){ return Object.assign({},p,{_f:parseYM(p.from),_t:(p.to && String(p.to).length?parseYM(p.to):null)}); })
+  return periods.map(function(p,i){ return Object.assign({},p,{_row:i,_f:parseYM(p.from),_t:(p.to && String(p.to).length?parseYM(p.to):null)}); })
     .sort(function(a,b){ return a._f - b._f; });
 }
 /* F06 — dòng "đến nghỉ hưu" đóng đến HẾT tháng đủ tuổi (retireIdx, đóng trọn tháng cuối làm việc),
@@ -179,20 +179,23 @@ function nnWindowMonths(firstM){
   if(firstM < 2020*12) return 180;
   return 240;
 }
-/* M1 — bhxhSummary(person): person=null → người chính (Tab 1 + state.periods); person là phần tử
-   state.extraPeople → dùng hồ sơ của người đó. Lạm phát/số năm mô phỏng/NOW là giả định chung nhà.
-   Hàm thuần: không đổi state. */
-function bhxhSummary(person){
+/* Dựng chuỗi tháng đóng đã hợp nhất của MỘT người — dùng chung cho lương hưu (bhxhSummary) và
+   rút BHXH một lần (bhxhLumpSum). person=null → người chính (Tab 1 + state.periods); person là
+   phần tử state.extraPeople → dùng hồ sơ của người đó. capRetire=true (lương hưu): tháng đóng sau
+   mốc đủ tuổi KHÔNG tính (nghỉ hưu muộn ngoài phạm vi ước tính, đếm monthsAfterRetire kèm cảnh
+   báo); capRetire=false (rút một lần): Điều 70 tính theo TOÀN BỘ thời gian ĐÃ ĐÓNG — mọi tháng
+   đóng hợp lệ đều tính, kể cả sau mốc đủ tuổi. Hàm thuần: không đổi state. */
+function bhxhMonthsRaw(person, capRetire){
   var birthYear = personBirth(person), gender = personGender(person), periods = personPeriods(person);
   var retIdx = retireAgeMonths(birthYear, gender);
   var retStart = retIdx + 1;   /* B05/Đ15 TT 12/2025: lương hưu tính và hưởng từ tháng liền kề sau tháng đủ tuổi */
   var ps = periodsChrono(periods).filter(function(p){ return p.type!=='none'; });
   var months=0, first=Infinity, monthsPre=0, monthsPost=0, lastEnd=-Infinity;
-  var contribPast=0, contribFuture=0, erFuture=0, overlapMonths=0, monthsAfterRetire=0;
+  var contribPast=0, contribFuture=0, contrib22=0, erFuture=0, overlapMonths=0, monthsAfterRetire=0;
   var Y2014 = 2014*12, recs=[];
   /* F04 — mỗi tháng đóng chỉ được đếm MỘT lần: giai đoạn chồng lấn hợp nhất theo thứ tự
-     thời gian (dòng sớm hơn thắng phần trùng). Dòng đóng tính đến hết tháng đủ tuổi (retIdx);
-     đóng sau đó là nghỉ hưu muộn — ngoài phạm vi ước tính, đếm monthsAfterRetire kèm cảnh báo. */
+     thời gian (dòng sớm hơn thắng phần trùng). Dòng "đến nghỉ hưu" (to trống) vẫn tính tới
+     tháng đủ tuổi — giả định kế hoạch đóng của app. */
   var covered=-Infinity;
   ps.forEach(function(p){
     var rawEnd = periodEnd(p, retIdx);
@@ -202,35 +205,56 @@ function bhxhSummary(person){
     var f0 = Math.max(p._f, covered + 1);   // khoảng hiệu dụng = phần chưa bị dòng trước chiếm
     if(f0 > rawEnd){ if(p._f < first) first = p._f; return; }
     covered = Math.max(covered, rawEnd);
-    var cntEnd = Math.min(rawEnd, retIdx);
+    var cntEnd = capRetire ? Math.min(rawEnd, retIdx) : rawEnd;
     if(cntEnd >= f0){
       for(var m = f0; m <= cntEnd; m++){
         months++;
         if(m <= Y2014-1) monthsPre++; else monthsPost++;
         var b = bhAt(p, m);
-        recs.push({m:m, type:p.type, b:b});
+        recs.push({m:m, type:p.type, b:b, row:p._row});
+        /* 22% vào quỹ hưu trí–tử tuất (bắt buộc: 8% NLĐ + 14% NSDLĐ; tự nguyện: 22%) — cơ sở
+           mức hưởng "chưa đủ một năm" của BHXH một lần (điểm c khoản 3 Điều 70 Luật 41/2024). */
+        contrib22 += b*0.22;
         if(m < NOW) contribPast += b*empRate(p, m);
         else { contribFuture += b*empRate(p, m); if(p.type!=='tn') erFuture += b*0.215; }
       }
     }
-    if(rawEnd > cntEnd) monthsAfterRetire += rawEnd - Math.max(cntEnd, f0 - 1);
+    if(capRetire && rawEnd > cntEnd) monthsAfterRetire += rawEnd - Math.max(cntEnd, f0 - 1);
     if(rawEnd > lastEnd) lastEnd = rawEnd;
     if(p._f < first) first = p._f;
   });
+  return { periods:periods, recs:recs, months:months, first:first, monthsPre:monthsPre, monthsPost:monthsPost,
+           contribPast:contribPast, contribFuture:contribFuture, contrib22:contrib22, erFuture:erFuture,
+           overlapMonths:overlapMonths, monthsAfterRetire:monthsAfterRetire, lastEnd:lastEnd,
+           retIdx:retIdx, retStart:retStart };
+}
+/* Điều chỉnh từng tháng đóng theo THÁNG HƯỞNG cho trước rồi tính bình quân tiền lương/thu nhập
+   tháng đóng (Điều 72–73 Luật 41/2024 — dùng cho cả lương hưu lẫn BHXH một lần): lương hưu chọn
+   tháng hưởng = retStart; rút một lần chọn tháng rút ước tính. Mutates raw.recs (thêm .adj) —
+   raw là đối tượng nội bộ vừa dựng bởi bhxhMonthsRaw, không phải state. */
+function bhxAvgAdjusted(raw, enjoyIdx){
+  var enjoyY = Math.floor(enjoyIdx/12), periods = raw.periods, recs = raw.recs, notes=[];
   /* B01/B02 — điều chỉnh từng tháng theo CHẾ ĐỘ rồi mới bình quân (khoản 1–2 Điều 73 Luật 41/2024;
      phạm vi tại Đ16 NĐ 158/2025): dn/tn mọi năm + nn CHỈ khi bắt đầu tham gia TỪ 01/01/2016 → hệ số
      CPI của năm hưởng (CV 340; năm >2026 là giả định lạm phát); nn bắt đầu tham gia TRƯỚC 01/01/2016 →
      TOÀN BỘ tháng đóng (kể cả từ 2016 trở đi) quy theo tỷ lệ mức tham chiếu tại hưởng/tháng đóng
      (cơ chế lương cơ sở — hệ số lương × lương cơ sở hiện hành). */
-  var enjoyY = Math.floor(retStart/12), notes=[];
   var nnRecs=[], othRecs=[];
   recs.forEach(function(r){ (r.type==='nn' ? nnRecs : othRecs).push(r); });
   var firstNN = nnRecs.length ? nnRecs[0].m : Infinity;
   var nnUseRef = firstNN < 2016*12;
+  var periodAdjusted = periods.map(function(){ return null; });
+  var periodAdjustedSum = periods.map(function(){ return 0; });
+  var periodAdjustedMonths = periods.map(function(){ return 0; });
   recs.forEach(function(r){
-    var c = (r.type==='nn' && nnUseRef) ? refSalary(retStart)/refSalary(r.m)
+    var c = (r.type==='nn' && nnUseRef) ? refSalary(enjoyIdx)/refSalary(r.m)
                                         : adjCoef(Math.floor(r.m/12), enjoyY, state.infl);
     r.adj = r.b * c;
+    periodAdjustedSum[r.row] += r.adj;
+    periodAdjustedMonths[r.row]++;
+  });
+  periodAdjusted.forEach(function(_,i){
+    if(periodAdjustedMonths[i]) periodAdjusted[i] = periodAdjustedSum[i]/periodAdjustedMonths[i];
   });
   if(nnUseRef) notes.push('Lương Nhà nước (bắt đầu tham gia trước 01/2016) điều chỉnh toàn bộ theo tỷ lệ mức tham chiếu');
   if(enjoyY > 2026) notes.push('Hệ số năm '+enjoyY+' chưa công bố — ngoại suy theo lạm phát '+state.infl+'%/năm (giả định)');
@@ -239,7 +263,7 @@ function bhxhSummary(person){
      toàn bộ. Hỗn hợp theo TT 12/2025 Đ16 khoản 3: (bq TL trong kỳ nn × TOÀN BỘ số tháng nn
      + tổng TL đã điều chỉnh phần kia) / (tổng tháng nn + tháng phần kia) — tháng nn ngoài kỳ vẫn
      làm trọng số, không bị mất như dùng riêng "N năm cuối" chia chung. */
-  var K = nnWindowMonths(first);
+  var K = nnWindowMonths(raw.first);
   var nnWin = (K===null || nnRecs.length<=K) ? nnRecs : nnRecs.slice(-K);
   var nnSum=0, othSum=0;
   nnWin.forEach(function(r){ nnSum += r.adj; });
@@ -247,26 +271,92 @@ function bhxhSummary(person){
   var nnAvg = nnWin.length ? nnSum/nnWin.length : 0;
   var avgMonths = nnRecs.length + othRecs.length;
   var avg = avgMonths ? (nnAvg*nnRecs.length + othSum)/avgMonths : 0;
+  return { avg:avg, periodAdjusted:periodAdjusted, notes:notes };
+}
+/* ===== Rút BHXH một lần — khoản 3 Điều 70 (bắt buộc) / Điều 102 (tự nguyện) Luật BHXH 41/2024 =====
+   Mỗi NĂM TRÒN đóng trước 01/01/2014: 1,5 × mức bình quân; từ năm 2014 trở đi: 2 × bình quân.
+   Năm chưa tròn trước 2014 (khi có cả hai giai đoạn) GỘP với thời gian đóng từ 2014 trở đi để tính
+   (điểm a khoản 3); tháng lẻ 1–6 tháng = nửa năm, 7–11 tháng = một năm (quy tắc làm tròn năm theo
+   khoản 6 Điều 5 — cùng quy tắc benefitYears). Khi KHÔNG có tháng đóng nào từ 2014, phần lẻ trước
+   2014 làm tròn theo quy tắc đó và vẫn tính hệ số 1,5 (thuộc thời gian trước 2014). Chưa đủ MỘT năm
+   đóng: mức = 22% × lương/thu nhập tháng × số tháng đã đóng, tối đa 2 × bình quân (điểm c khoản 3).
+   Khoản 4: riêng trường hợp bệnh (điểm c) và suy giảm khả năng lao động/khuyết tật đặc biệt nặng
+   (điểm d) mức hưởng bao gồm CẢ phần ngân sách hỗ trợ BHXH tự nguyện — app không mô hình phần hỗ
+   trợ. Thời điểm tính hưởng = thời điểm cơ quan BHXH ban hành quyết định (khoản 5) → hệ số điều
+   chỉnh chọn theo năm rút ước tính. Người có thời gian đóng từ trước 1995 có thể được giải quyết
+   theo quy định riêng cho giai đoạn này — app chưa mô hình, chỉ áp công thức 1,5/2 thống nhất. */
+function lumpSumSplit(monthsPre, monthsPost){
+  var split = { yearsPre: Math.floor(monthsPre/12), poolMonths: 0, yearsPool: 0, poolRate: 2 };
+  if(monthsPost > 0) split.poolMonths = monthsPre%12 + monthsPost;   // gộp năm lẻ trước 2014 vào giai đoạn từ 2014
+  else { split.poolMonths = monthsPre%12; split.poolRate = 1.5; }    // chỉ có trước 2014: lẻ làm tròn, hệ số 1,5
+  split.yearsPool = benefitYears(split.poolMonths);
+  return split;
+}
+function lumpSumMonthlyCount(monthsPre, monthsPost){
+  var L = lumpSumSplit(monthsPre, monthsPost);
+  return 1.5*L.yearsPre + L.poolRate*L.yearsPool;   // tổng "số tháng mức bình quân" được hưởng
+}
+/* M1 — bhxhSummary(person): tổng hợp BHXH + lương hưu của MỘT người. Lạm phát/số năm mô phỏng/NOW
+   là giả định chung nhà. Hàm thuần: không đổi state. */
+function bhxhSummary(person){
+  var raw = bhxhMonthsRaw(person, true), gender = personGender(person);   /* lương hưu: không tính tháng đóng sau mốc đủ tuổi */
+  var A = bhxAvgAdjusted(raw, raw.retStart);
+  var notes = A.notes.slice();
   /* B04 — điều kiện xét theo tháng thực tế; tỷ lệ theo SỐ NĂM TÍNH HƯỞNG (tháng lẻ 1–6 = nửa năm, 7–11 = một năm). */
-  var benYears = benefitYears(months), rate = pensionRate(benYears, gender);
+  var benYears = benefitYears(raw.months), rate = pensionRate(benYears, gender);
   /* B03 — sàn mức tham chiếu CHỈ áp cho hồ sơ đã tham gia trước 01/7/2025 và đủ 20 NĂM BẮT BUỘC
      (khoản 11 Điều 141 Luật 41/2024; Điều 13 NĐ 158/2025) — không áp cho thuần tự nguyện hay dưới 20 năm bắt buộc. */
-  var compMonths=0; recs.forEach(function(r){ if(r.type!=='tn') compMonths++; });
-  var floorOK = compMonths>=240 && isFinite(first) && first < 2025*12+6;
-  var rawPension = rate/100*avg;
-  var pension = !avgMonths ? 0 : (floorOK ? Math.max(rawPension, refSalary(retStart)) : rawPension);
-  if(floorOK && rawPension < refSalary(retStart)) notes.push('Mức hưu được nâng lên sàn mức tham chiếu');
-  /* Rút BHXH một lần (chỉ khi CHƯA đủ điều kiện lương hưu): 1,5 tháng bq/năm trước 2014 + 2 tháng bq/năm sau;
-     thời điểm: 12 tháng sau khi kết thúc đóng (Luật BHXH 2024 Đ82 — giả định đơn giản hoá) */
-  var lumpAmt = avg * (monthsPre/12*1.5 + monthsPost/12*2);
-  var lumpMonth = isFinite(lastEnd) ? Math.min(Math.max(NOW, lastEnd + 12), NOW + state.simYears*12) : -1;
-  var defaultFirst = (birthYear+18)*12;
-  return { months:months, years:months/12, benYears:benYears, avg:avg, rate:rate, pension:pension, first:first,
-           firstOrDefault: isFinite(first)? first : defaultFirst, usingDefault: !isFinite(first),
-           retireIdx:retIdx, retStart:retStart, eligible:months>=180, floorOK:floorOK, compMonths:compMonths,
-           estNotes:notes, contribPast:contribPast, contribFuture:contribFuture, erFuture:erFuture,
-           lumpAmt:lumpAmt, lumpMonth:lumpMonth, monthsPre:monthsPre, monthsPost:monthsPost,
-           overlapMonths:overlapMonths, monthsAfterRetire:monthsAfterRetire };
+  var compMonths=0; raw.recs.forEach(function(r){ if(r.type!=='tn') compMonths++; });
+  var floorOK = compMonths>=240 && isFinite(raw.first) && raw.first < 2025*12+6;
+  var rawPension = rate/100*A.avg;
+  var pension = !raw.months ? 0 : (floorOK ? Math.max(rawPension, refSalary(raw.retStart)) : rawPension);
+  if(floorOK && rawPension < refSalary(raw.retStart)) notes.push('Mức hưu được nâng lên sàn mức tham chiếu');
+  /* Rút BHXH một lần — công thức Điều 70 khoản 3 (xem lumpSumSplit); dùng bình quân theo năm
+     hưởng hưu của chính summary (bhxhLumpSum tính riêng theo năm rút). Thời điểm chờ 12 tháng
+     (điểm đ khoản 1 Điều 70 + Điều 14 NĐ 158/2025): 12 tháng không đóng tính liên tục đến tháng
+     liền trước tháng nộp hồ sơ → nộp được từ tháng thứ 13 sau tháng đóng cuối. */
+  var lumpAmt = (raw.months && raw.months < 12) ? Math.min(raw.contrib22, 2*A.avg)
+                                                : A.avg*lumpSumMonthlyCount(raw.monthsPre, raw.monthsPost);
+  var lumpMonth = isFinite(raw.lastEnd) ? Math.min(Math.max(NOW, raw.lastEnd + 13), NOW + state.simYears*12) : -1;
+  var birthYear = personBirth(person), defaultFirst = (birthYear+18)*12;
+  return { months:raw.months, years:raw.months/12, benYears:benYears, avg:A.avg, rate:rate, pension:pension, first:raw.first,
+           firstOrDefault: isFinite(raw.first)? raw.first : defaultFirst, usingDefault: !isFinite(raw.first),
+           retireIdx:raw.retIdx, retStart:raw.retStart, eligible:raw.months>=180, floorOK:floorOK, compMonths:compMonths,
+           estNotes:notes, contribPast:raw.contribPast, contribFuture:raw.contribFuture, erFuture:raw.erFuture,
+           lumpAmt:lumpAmt, lumpMonth:lumpMonth, monthsPre:raw.monthsPre, monthsPost:raw.monthsPost,
+           overlapMonths:raw.overlapMonths, monthsAfterRetire:raw.monthsAfterRetire, periodAdjusted:A.periodAdjusted };
+}
+/* bhxhLumpSum(person): mức rút BHXH một lần ước tính cho MỘT người (null = người chính) — điều kiện
+   hưởng (khoản 1 Điều 70 / Điều 102: đủ tuổi hưu chưa đủ 15 năm, ra nước ngoài định cư, bệnh, suy
+   giảm khả năng lao động ≥81% hoặc khuyết tật đặc biệt nặng, điểm đ — tham gia trước 01/07/2025
+   đóng chưa đủ 20 năm và chờ 12 tháng, điểm e — quân nhân/công an phục viên…) là dữ kiện cá nhân
+   app không kiểm tra được → hàm chỉ trả MỨC hưởng; UI nêu điều kiện. Khác bhxhSummary: (1) tính
+   TOÀN BỘ thời gian đã đóng kể cả sau mốc đủ tuổi (Điều 70 không giới hạn theo tuổi — capRetire
+   false); (2) hệ số điều chỉnh bình quân chọn theo NĂM RÚT ước tính (khoản 5: thời điểm tính hưởng
+   = thời điểm BHXH ban hành quyết định), không theo năm hưởng hưu. Trả {ok:false, reason:'invalid'
+   |'empty'} khi giai đoạn đóng còn BẤT KỲ lỗi nào (kể cả lương/tăng lương không hợp lệ — không trả
+   NaN) hoặc chưa có tháng đóng nào. Thuần. */
+function bhxhLumpSum(person){
+  var perErrs = validatePensionPeriods(personPeriods(person),personBirth(person),personGender(person),'')
+    .filter(function(v){ return v.level==='error'; });
+  if(perErrs.length) return { ok:false, reason:'invalid' };
+  var raw = bhxhMonthsRaw(person, false);
+  if(!raw.months) return { ok:false, reason:'empty' };
+  /* Mốc nộp theo trường hợp điểm đ (chờ 12 tháng): Điều 14 NĐ 158/2025 — 12 tháng không đóng tính
+     liên tục đến tháng liền kề trước tháng tiếp nhận hồ sơ → đóng cuối T12/2030 → nộp từ T1/2032.
+     Các trường hợp khác không có chờ 12 tháng — UI hiển thị riêng. */
+  var eligMonth = raw.lastEnd + 13;
+  var A = bhxAvgAdjusted(raw, Math.max(NOW, eligMonth));
+  var L = lumpSumSplit(raw.monthsPre, raw.monthsPost);
+  var monthlyCount = 1.5*L.yearsPre + L.poolRate*L.yearsPool;
+  var underOneYear = raw.months < 12;
+  var amount = underOneYear ? Math.min(raw.contrib22, 2*A.avg) : A.avg*monthlyCount;
+  var openRows = personPeriods(person).filter(function(p){ return p.type!=='none' && (!p.to || !String(p.to).length); }).length;
+  return { ok:true, months:raw.months, monthsPre:raw.monthsPre, monthsPost:raw.monthsPost,
+           avg:A.avg, eligMonth:eligMonth, lastEnd:raw.lastEnd, split:L, monthlyCount:monthlyCount,
+           amount:amount, underOneYear:underOneYear, paid22:raw.contrib22, capped:underOneYear && raw.contrib22 > 2*A.avg,
+           eligible:raw.months>=180, overlapMonths:raw.overlapMonths, monthsAfterRetire:raw.monthsAfterRetire,
+           openRows:openRows, notes:A.notes, retireIdx:raw.retIdx };
 }
 
 
@@ -291,7 +381,8 @@ function pensionProjection(ps){
 
 /* Tự tính lương hưu NHẬP TAY từ danh sách giai đoạn đóng (Tab 3): trả về {p0,amount,startYear,startMonth}
    đủ điều kiện ghi vào state.pensionSimple, hoặc null khi chưa tính được — giữ nguyên mức hiện tại:
-   - còn lỗi định dạng/đảo đầu-cuối ở giai đoạn (lỗi refOnly của state.periods — F04) → không tính bừa từ các dòng còn lại;
+   - giai đoạn còn BẤT KỲ lỗi nào của validatePensionPeriods (định dạng/đảo đầu-cuối — F04, hoặc
+     lương/tăng lương không hợp lệ) → không tính bừa từ các dòng còn lại, không trả NaN;
    - không tháng đóng nào hợp lệ (months = 0) hoặc chưa đủ 180 tháng (điều kiện ≥ 15 năm theo tháng thực).
    Tháng bắt đầu hưởng = THÁNG ĐỦ TUỔI nghỉ hưu (đợt 13, 12/09/2026 — yêu cầu người dùng: nút ⚙ reset
    tháng về 1; giả định sinh tháng 1 nên mốc đủ tuổi rơi tháng 1). p0 = mức danh nghĩa TẠI THÁNG BẮT ĐẦU
@@ -300,7 +391,7 @@ function pensionProjection(ps){
    nhập tay; đưa vào mô phỏng qua pensionMonthly sẽ nhận lại đúng p0 ở tháng hưởng (không nhân hai lần). */
 function pensionFromPeriods(person){
   var perErrs = validatePensionPeriods(personPeriods(person),personBirth(person),personGender(person),'')
-    .filter(function(v){ return v.level==='error' && v.refOnly; });
+    .filter(function(v){ return v.level==='error'; });
   if(perErrs.length) return null;
   var s = bhxhSummary(person);
   if(!s.months || !s.eligible) return null;

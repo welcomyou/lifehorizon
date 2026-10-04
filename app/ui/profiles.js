@@ -4,7 +4,8 @@
    mới / Quản lý + trạng thái "đã lưu / có thay đổi chưa lưu / không lưu được". Dialog Quản lý (đợt 30
    — rộng co theo màn hình) chỉ còn ＋ Hồ sơ mới + Nhập JSON phía trên; mọi thao tác theo hồ sơ nằm
    TRÊN TỪNG HÀNG: Mở · Xuất (tải JSON của đúng hồ sơ đó) · Đổi tên · Nhân bản · Xóa → _trash;
-   hồ sơ đang mở tô sáng kèm chip; offline (không dịch vụ) vẫn Nhập được và Xuất bản đang hiển thị.
+   hồ sơ đang mở tô sáng kèm chip; offline (không dịch vụ — LUÔN vậy trên bản web Cloudflare Pages)
+   vẫn mở được Quản lý để Nhập JSON / Xuất bản đang hiển thị (Lưu/Lưu thành bản mới bị khóa).
    Bản nháp tự lưu vào profiles/_draft/<id>.json (trì hoãn 1,2s sau mỗi lần refresh) — khi mở lại
    hồ sơ có bản nháp mới hơn file thì báo phục hồi.
    Xung đột ghi: PUT kèm ?rev=<revision>; server trả 409 khi file đã bị sửa từ ngoài → hỏi ghi đè.
@@ -21,6 +22,9 @@ var prBaselinePending = false; /* chốt baseline ngay sau lần refresh đầu 
 var prRiskRun = null;        /* kết quả kiểm tra rủi ro gần nhất của cấu hình hiện tại (kèm sig) */
 var prPendingCfYear = null;  /* khóa cfYear cũ nay là năm đang mở ở bảng năm Tab 7 */
 var prDraftTimer = null, prDraftBanner = null, prLastSaveError = '', prOfflineImported = '';
+/* Dòng "✓ Đã lưu" chỉ hiện vài giây sau khi bấm Lưu rồi tự ẩn — không thường trực (yêu cầu 04/10:
+   thanh trạng thái chỉ cần báo "có thay đổi chưa lưu"; trạng thái khớp file để trống cho sạch). */
+var prSavedFlashUntil = 0, prSavedFlashTimer = null;
 
 /* ===== Gọi API của app/server.js — fetch tương đối; lỗi trả Error (status, conflict) ===== */
 function prApi(method, path, body){
@@ -64,6 +68,8 @@ function prCaptureViewState(){
   return { tab: act ? act.dataset.tab : 't1', cfYear: openYearActionYear||prPendingCfYear||null };
 }
 function prActivateTab(tab){
+  /* navSetTab (ui/app.js) còn đồng bộ dropdown chọn tab trên màn hẹp */
+  if(typeof navSetTab === 'function'){ navSetTab(tab); return; }
   var b = document.querySelector('nav button[data-tab="'+tab+'"]');
   if(!b) return;
   document.querySelectorAll('nav button').forEach(function(x){ x.classList.remove('active'); });
@@ -89,6 +95,7 @@ function prApplyState(p, baseline){
   if(p.viewState && p.viewState.tab) prActivateTab(p.viewState.tab);
   prBaselinePending = baseline !== false;
   if(baseline === false) prSavedSignature = '';
+  prSavedFlashUntil = 0;   /* mở/đổi hồ sơ: không mang theo dòng "đã lưu" của hồ sơ trước */
   writeInputs();
   seedMoneyGood(document);
   refresh();
@@ -186,12 +193,14 @@ function prRenderBar(){
   sel.innerHTML = h;
   sel.disabled = !prService;
   if(prOpen && prList.some(function(e){ return e.file === prOpen.file; })){ sel.value = prOpen.file; }
-  ['prSave','prSaveAs','prManage'].forEach(function(id){ var b=$(id); if(b)b.disabled = !prService; });
+  /* Lưu/Lưu thành bản mới cần dịch vụ ghi file — bản web (Cloudflare Pages) không có nên khóa;
+     Quản lý vẫn mở được ở chế độ offline để Nhập/Xuất JSON (dialog có nhánh riêng). */
+  ['prSave','prSaveAs'].forEach(function(id){ var b=$(id); if(b)b.disabled = !prService; });
 
   /* Thanh nằm TRÊN NỀN XANH header (đợt 10): chỉ dùng màu sáng — .ps-saved/.ps-dirty/.ps-err */
   var html = '';
   if(!prService){
-    html = '<span class="ps-err">⚠ Chưa nối được dịch vụ hồ sơ</span> — hãy khởi động bằng cách <b>nhấp đúp LifeHorizon.bat</b> trong thư mục dự án (hoặc chạy <b>npm run serve</b>) rồi mở qua địa chỉ nó in ra. Dữ liệu vẫn tự lưu trong trình duyệt.' +
+    html = '<span class="ps-saved">💾 Dữ liệu tự lưu trong trình duyệt</span> — bấm <b>Quản lý</b> để Nhập/Xuất file JSON (sao lưu hoặc chuyển máy).' +
       (prOfflineImported ? ' Đã nhập hồ sơ <b>'+esc(prOfflineImported)+'</b> từ file vào phiên làm việc.' : '');
   } else {
     if(prLastSaveError) html += '<span class="ps-err">⚠ Không lưu được: '+esc(prLastSaveError)+'</span> · ';
@@ -201,10 +210,11 @@ function prRenderBar(){
         : 'Thư mục hồ sơ trống — tạo hồ sơ đầu tiên từ dữ liệu đang có. <button type="button" class="hbtn primary" id="prFirstSave">＋ Tạo hồ sơ đầu tiên</button>';
       if(prOfflineImported) html += ' Đã nhập hồ sơ <b>'+esc(prOfflineImported)+'</b> từ file vào phiên làm việc.';
     } else if(prDirty()){
-      html += '<b class="ps-dirty">● Có thay đổi chưa lưu</b> — '+esc(prOpen.name);
-    } else {
-      html += '<b class="ps-saved">✓ Đã lưu vào file</b> — '+esc(prOpen.name)+' · lần lưu thứ '+prOpen.revision+
-        (prOpen.savedAt ? ' · '+prTime(prOpen.savedAt) : '');
+      /* Không kèm tên hồ sơ — tên đang hiển thị sẵn trong ô chọn phía trên (yêu cầu 04/10) */
+      html += '<b class="ps-dirty">● Có thay đổi chưa lưu</b>'+
+        ' <button type="button" class="hbtn" id="prDiscard" title="Bỏ toàn bộ thay đổi từ lần lưu cuối — quay về đúng bản trong file hồ sơ">↺ Bỏ thay đổi</button>';
+    } else if(Date.now() < prSavedFlashUntil){
+      html += '<b class="ps-saved">✓ Đã lưu vào file</b>';
     }
   }
   if(prDraftBanner){
@@ -214,8 +224,30 @@ function prRenderBar(){
   }
   st.innerHTML = html;
   var fb = $('prFirstSave'); if(fb) fb.onclick = function(){ prDialogSaveAs(); };
+  var dc = $('prDiscard'); if(dc) dc.onclick = function(){ prDiscardChanges(); };
   var rd = $('prDraftRestore'); if(rd) rd.onclick = function(){ prRestoreDraft(); };
   var dd = $('prDraftDrop'); if(dd) dd.onclick = function(){ prDeleteDraftQuiet(); prRenderBar(); };
+}
+/* Hủy thay đổi chưa lưu: nạp lại file hồ sơ (đường chính thức ngoài prOpenByFile — không qua
+   prGuardDirty vì mục đích CHÍNH LÀ bỏ thay đổi). Xóa luôn bản nháp để banner "phục hồi nháp"
+   không đưa lại đúng phần vừa hủy; không gọi prCheckDraft (GET có thể thắng DELETE — race). */
+function prDiscardChanges(){
+  if(!prOpen || !prService) return;
+  appDialog({title:'Bỏ thay đổi chưa lưu?',
+    html:'Toàn bộ thay đổi từ lần lưu cuối của <b>'+esc(prOpen.name)+'</b> sẽ bị bỏ — quay về đúng bản đang có trong file hồ sơ.',
+    okText:'Bỏ thay đổi', cancelText:'Ở lại'})
+  .then(function(ok){
+    if(!ok) return;
+    prApi('GET','/api/profiles/file/'+encodeURIComponent(prOpen.file)).then(function(p){
+      prDraftBanner = null;
+      prDeleteDraftQuiet();
+      prRiskRun = p.lastRiskRun || null;
+      prApplyState(p);
+      prRenderRiskOut();
+    }).catch(function(e){
+      appDialog({title:'Không đọc được hồ sơ', html:esc(e.message), okText:'Đã hiểu'});
+    });
+  });
 }
 
 /* ===== Mở hồ sơ từ file trong thư mục ===== */
@@ -265,13 +297,19 @@ function prMarkSaved(revision, savedAt){
   setOpenProfileMeta({ file:prOpen.file, id:prOpen.id, name:prOpen.name, revision:revision, savedAt:prOpen.savedAt });
   prSavedSignature = stateSignature;
   prLastSaveError = '';
+  prSavedFlashUntil = Date.now()+5000;
+  clearTimeout(prSavedFlashTimer);
+  prSavedFlashTimer = setTimeout(function(){
+    prSavedFlashUntil = 0;
+    if(prOpen && !prDirty()) prRenderBar();
+  }, 5200);
   prDeleteDraftQuiet();
   prRefreshList();
 }
 function prDoSave(){
   return new Promise(function(resolve){
     if(!prService){
-      appDialog({title:'Chưa có dịch vụ hồ sơ', html:'Ứng dụng không nối được dịch vụ local nên không ghi được file hồ sơ. Hãy khởi động bằng cách <b>nhấp đúp LifeHorizon.bat</b> trong thư mục dự án (hoặc chạy <b>npm run serve</b>) rồi mở qua địa chỉ nó in ra; hoặc dùng <b>Xuất JSON</b> để tải bản sao về máy.', okText:'Đã hiểu'});
+      appDialog({title:'Bản web lưu trong trình duyệt', html:'Bản web không ghi file hồ sơ trên máy — dữ liệu đang <b>tự lưu trong trình duyệt</b> (giữ nguyên khi tắt rồi mở lại). Muốn có bản lưu riêng, bấm <b>Quản lý → Xuất JSON</b> để tải file về máy.', okText:'Đã hiểu'});
       resolve(false); return;
     }
     if(!prOpen){ prDialogSaveAs().then(resolve); return; }
@@ -300,7 +338,7 @@ function prDoSave(){
 function prDialogSaveAs(){
   return new Promise(function(resolve){
     if(!prService){
-      appDialog({title:'Chưa có dịch vụ hồ sơ', html:'Không ghi được file hồ sơ — hãy khởi động bằng <b>LifeHorizon.bat</b> (nhấp đúp) hoặc <b>npm run serve</b>, hoặc dùng <b>Xuất JSON</b> để tải bản sao về máy.', okText:'Đã hiểu'});
+      appDialog({title:'Bản web không ghi file hồ sơ', html:'Dữ liệu đang <b>tự lưu trong trình duyệt</b> — không cần thao tác gì thêm. Muốn tạo bản lưu riêng (sao lưu, chuyển máy), bấm <b>Quản lý → Xuất JSON</b> để tải file về máy; nạp lại bằng <b>Nhập JSON</b>.', okText:'Đã hiểu'});
       resolve(false); return;
     }
     var defName = (prOpen && prOpen.name) || (state.mainName && String(state.mainName).trim()) || 'Hồ sơ của tôi';
@@ -422,7 +460,7 @@ function prRenderManage(){
       (rows || '<tr><td colspan="4" style="text-align:left">Chưa có hồ sơ nào.</td></tr>')+
       '</tbody></table></div>';
   } else {
-    listHtml = '<div class="hint">Chưa nối được dịch vụ hồ sơ (khởi động bằng <b>LifeHorizon.bat</b> hoặc <b>npm run serve</b>) nên không có danh sách — Nhập/Xuất JSON vẫn dùng được, dữ liệu đang lưu trong trình duyệt.</div>';
+    listHtml = '<div class="hint">Đang chạy bản web (không có dịch vụ hồ sơ trên máy): dữ liệu <b>tự lưu trong trình duyệt</b> — <b>Nhập JSON</b> để nạp hồ sơ từ file, <b>Xuất JSON</b> để tải bản đang mở về máy.</div>';
   }
   appDialog({title:'Quản lý hồ sơ', html: prManageToolbar() + listHtml, okText:'Xong', wide:true});
   var wire = function(attr, fn){
@@ -442,15 +480,17 @@ function prRenderManage(){
 function prManageReload(){ prRefreshList().then(function(){ prRenderManage(); }); }
 function prManageRename(file){
   prApi('GET','/api/profiles/file/'+encodeURIComponent(file)).then(function(p){
-    appDialog({title:'Đổi tên hồ sơ', html:'<label for="prRenName">Tên hiển thị mới</label><input id="prRenName" maxlength="60" value="'+esc(p.name||'')+'">'+
-      '<div class="hint">Chỉ đổi tên hiển thị — file và mã hồ sơ giữ nguyên nên liên kết không mất.</div>', okText:'Đổi tên', cancelText:'Huỷ'})
+    appDialog({title:'Đổi tên & ghi chú hồ sơ', html:'<label for="prRenName">Tên hiển thị</label><input id="prRenName" maxlength="60" value="'+esc(p.name||'')+'">'+
+      '<label for="prRenDesc" style="margin-top:8px">Ghi chú (tùy chọn)</label><textarea id="prRenDesc" rows="2">'+esc(p.description||'')+'</textarea>'+
+      '<div class="hint">Tên và ghi chú chỉ để hiển thị — file và mã hồ sơ giữ nguyên nên liên kết không mất.</div>', okText:'Lưu thay đổi', cancelText:'Huỷ'})
     .then(function(ok){
       if(!ok) return;
       var name = ($('prRenName') && $('prRenName').value.trim()) || p.name;
-      var np = buildProfile(p, name, p.description||'', p.state, p.viewState, p.lastRiskRun, (p.revision||0)+1);
+      var desc = $('prRenDesc') ? $('prRenDesc').value : (p.description||'');
+      var np = buildProfile(p, name, desc, p.state, p.viewState, p.lastRiskRun, (p.revision||0)+1);
       prApi('PUT','/api/profiles/file/'+encodeURIComponent(file)+'?rev='+(p.revision||0), JSON.stringify(np))
       .then(function(){
-        if(prOpen && prOpen.file === file){ prOpen.name = name; prOpen.revision = np.revision; setOpenProfileMeta({ file:file, id:prOpen.id, name:name, revision:np.revision, savedAt:np.updatedAt }); }
+        if(prOpen && prOpen.file === file){ prOpen.name = name; prOpen.description = desc; prOpen.revision = np.revision; setOpenProfileMeta({ file:file, id:prOpen.id, name:name, revision:np.revision, savedAt:np.updatedAt }); }
         prManageReload();
       })
       .catch(function(e){ appDialog({title:'Không đổi được tên', html:esc(e.message), okText:'Đã hiểu'}); });
@@ -584,8 +624,11 @@ function profileBarInit(){
   var bSaveAs = $('prSaveAs'); if(bSaveAs) bSaveAs.onclick = function(){ prDialogSaveAs(); };
   var bMng = $('prManage'); if(bMng) bMng.onclick = function(){ prManage(); };
   var file = $('prFile'); if(file) file.onchange = function(){ prImportFile(file); };
+  /* Chỉ chặn rời trang khi đang mở HỒ SƠ FILE còn thay đổi chưa lưu vào file. Bản web không có
+     hồ sơ file — dữ liệu tự lưu localStorage sau mỗi thay đổi nên refresh/tắt tab không mất gì;
+     prDirty() luôn true ở đây (không có baseline file) → cảnh báo "rời trang" mỗi lần là hiểu nhầm. */
   window.addEventListener('beforeunload', function(ev){
-    if(prDirty()){ ev.preventDefault(); ev.returnValue = ''; }
+    if(prOpen && prDirty()){ ev.preventDefault(); ev.returnValue = ''; }
   });
   prRenderBar();
   prApi('GET','/api/profiles').then(function(r){

@@ -65,10 +65,10 @@ function moneyParse(v){
 }
 function moneyErr(s){
   var t=String(s==null?'':s).replace(/\s/g,'');
+  if(/\D/.test(t.replace(/[.,]/g,'')))return 'Ô tiền chỉ nhận chữ số — phần mềm tự thêm dấu chấm ngàn, không cần gõ.';
   if(/[eE]/.test(t))return 'Không hỗ trợ ký hiệu khoa học (ví dụ 1e6) — nhập số thường, ví dụ 1.000.000.';
   if(t.indexOf('-')>=0)return 'Ô tiền chỉ nhận số dương — không nhập dấu trừ.';
   if(/[.,]\d{1,2}$/.test(t))return 'Tiền tính theo đồng nguyên — bỏ phần lẻ sau dấu phẩy/chấm.';
-  if(/\D/.test(t.replace(/[.,]/g,'')))return 'Chỉ nhập chữ số; chấm/phẩy chỉ dùng phân nhóm ngàn.';
   if(t.replace(/[.,]/g,'').length>15)return 'Quá 15 chữ số — kiểm tra lại số tiền.';
   return 'Giá trị tiền không hợp lệ.';
 }
@@ -76,6 +76,37 @@ function setMoneyBad(el,why){
   if(!el||!el.classList)return;
   if(why){ if(!el.classList.contains('bad'))el.dataset.ot=el.getAttribute('title')||''; el.classList.add('bad'); el.setAttribute('title',why); }
   else if(el.classList.contains('bad')){ el.classList.remove('bad'); if(el.dataset.ot)el.setAttribute('title',el.dataset.ot); else el.removeAttribute('title'); delete el.dataset.ot; }
+}
+/* S04 (03/10/2026) — ô SỐ theo quy chuẩn VN: dấu . là nhóm ngàn, dấu , là thập phân.
+   numParseVN đọc cả hai thói quen gõ: "6,5" và "6.5" đều = 6,5; "20.000.000" = 20 triệu;
+   "2,000,000" = 2 triệu (kiểu EN, đủ nhóm 3 chữ số); nhận dấu -, +; sai cú pháp → NaN.
+   numVal = numParseVN của el.value (ô class="num"); vnNumStr hiển thị ngược lại: , thập phân,
+   . nhóm ngàn chỉ khi phần nguyên ≥ 10.000 để năm/tháng/tuổi không thành "2.052". */
+function numParseVN(v){
+  var s=String(v==null?'':v).replace(/\s/g,'');
+  if(s==='')return 0;
+  var neg=s.charAt(0)==='-';
+  if(neg||s.charAt(0)==='+')s=s.slice(1);
+  if(!/^[0-9.,]+$/.test(s))return NaN;
+  if(s.indexOf(',')>=0){
+    if(s.indexOf('.')<0&&/^\d{1,3}(,\d{3})+$/.test(s))s=s.replace(/,/g,'');
+    else s=s.replace(/\./g,'').replace(/,/g,'.');
+  }else if(s.indexOf('.')>=0){
+    if(/^\d{1,3}(\.\d{3})+$/.test(s))s=s.replace(/\./g,'');
+    else if(!/^\d*\.\d*$/.test(s))return NaN;
+  }
+  if(!/^\d*\.?\d*$/.test(s)||s===''||s==='.')return NaN;
+  var n=parseFloat(s);
+  return isFinite(n)?(neg?-n:n):NaN;
+}
+function numVal(el){ return numParseVN(el&&el.value!==undefined?el.value:el); }
+function vnNumStr(v){
+  if(!isFinite(v))return '';
+  var r=Math.round(v*1e6)/1e6, neg=r<0, a=String(Math.abs(r)), ip=a, dp='';
+  var dot=a.indexOf('.');
+  if(dot>=0){ ip=a.slice(0,dot); dp=a.slice(dot+1); }
+  if(+ip>=10000)ip=fmtMoney(+ip);
+  return (neg?'-':'')+(dp?ip+','+dp:ip);
 }
 /* Diễn giải chuỗi ĐANG BIÊN TẬP (dùng chung cho commit lẫn blur — S01): dãy số + dấu chấm được coi
    là "gõ dở một nhóm mới" (nhóm cuối ≥3 chữ số, nhóm giữa đủ 3, nhóm đầu 1–3) thì lấy nguyên dãy
@@ -118,10 +149,11 @@ function appDialog(opt){
     var mask = $('appModal'), tt = $('amTitle'), bb = $('amBody'), btns = $('amBtns');
     var box = mask.querySelector('.modal');
     if(box) box.classList.toggle('wide', !!opt.wide); // dialog rộng (Quản lý hồ sơ) — co theo màn hình, thân cuộn riêng
+    if(box && opt.cls) box.classList.add(opt.cls);    // đợt 80 — class riêng cho popup (vd .lsum: cao giới hạn có cuộn)
     tt.textContent = opt.title || 'Thông báo';
     bb.innerHTML = opt.html || '';
     btns.innerHTML = '';
-    function done(v){ mask.classList.remove('show'); if(box) box.classList.remove('wide'); document.removeEventListener('keydown', onKey, true); resolve(v); }
+    function done(v){ mask.classList.remove('show'); if(box){ box.classList.remove('wide'); if(opt.cls) box.classList.remove(opt.cls); } document.removeEventListener('keydown', onKey, true); resolve(v); }
     function mk(txt, cls, val){
       var b = document.createElement('button'); b.className = cls; b.textContent = txt;
       b.onclick = function(){ done(val); }; btns.appendChild(b); return b;

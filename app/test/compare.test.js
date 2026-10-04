@@ -195,6 +195,50 @@ test('compare: lịch Test đủ 180 tháng — N=0 vẫn so toàn bộ BHXH v�
   assert.equal(r.rows[0].peakCount,1);            // đúng một tổ hợp x=7, i=4, y=7
 });
 
+test('compare: sổ hưu chi đúng bằng lương hưu — LÃI DƯ Ở LẠI SỔ tái đầu tư (đối chiếu công thức đóng)',()=>{
+  /* Một tổ hợp duy nhất x=3%, lạm phát 4%, hưu KHÔNG tăng (y=0) → quỹ đạo sổ có nghiệm đóng
+     b_k = (b0 − P/(m−1))·m^k + P/(m−1), m=(1+x)^(1/12). Engine phải cạn đúng tháng này: nếu bỏ mất
+     phần lãi dư (không tái đầu tư), sổ cạn sớm hơn. */
+  const c=fresh(2),s=c.state;c.setNow(2026*12+8);   // T9/2026 như hồ sơ chính
+  s.birthYear=1998;s.gender='male';s.infl=4;
+  s.periods=[{from:'2020-01',to:'2034-12',type:'tn',bh:10e6,growth:0}];
+  const person=cmpPerson(1998,'male',s.periods);
+  const r=c.compareYearsScan({bStart:10e6,bGrow:'flat',xMin:3,xMax:3,iMin:4,iMax:4,yMin:0,yMax:0},person);
+  assert.equal(r.ok,true);
+  const B=r.B, recs=c.compareRecs(person,4).recs, m=Math.pow(1.03,1/12);
+  let b0=0; recs.forEach(x=>{ b0+=0.22*x.b*Math.pow(m,B-1-x.m); });        // FV 180 khoản tới B−1
+  const enjoyY=Math.floor(B/12);
+  let othSum=0; recs.forEach(x=>{ othSum+=x.b*c.adjCoef(Math.floor(x.m/12),enjoyY,4); });
+  const P=c.pensionRate(c.benefitYears(180),'male')/100*(othSum/180);      // lịch chung 180<240 tháng tn → không sàn
+  const bStar=P/(m-1);
+  assert.ok(b0<bStar,'ca thử phải có điểm cạn để đối chiếu được');
+  const k0=Math.log(bStar/(bStar-b0))/Math.log(m);
+  assert.ok(r.rows[0].thresholdRanges.length>0);
+  assert.equal(r.rows[0].thresholdRanges[0].from,B+Math.floor(k0));        // cạn ở lần cập nhật k=floor(k0)+1
+  /* Hai mốc mới: ăn gốc phải xảy ra trước (hoặc cùng) mốc cạn. */
+  assert.ok(r.rows[0].loseRanges.length>0);
+  assert.ok(r.rows[0].loseRanges[0].from<=r.rows[0].thresholdRanges[0].from);
+  assert.ok(r.rows[0].loseRanges[0].from>=r.B);
+});
+
+test('compare: loseRanges (tuổi TK bị ăn vào gốc) — cùng ngưỡng, trong miền [B,U], không muộn hơn mốc cạn',()=>{
+  const c=fresh(2),s=c.state;c.setNow(2026*12);
+  s.birthYear=1985;s.gender='male';
+  s.periods=[{from:'2015-01',to:'2025-12',type:'dn',bh:10e6,growth:0}];
+  const r=c.compareYearsScan({bStart:10e6,bGrow:'flat',contribRate:22,maxAge:100},null);
+  assert.equal(r.ok,true);
+  r.rows.forEach(function(row){
+    if(row.months<180){ assert.equal(row.loseRanges.length,0); return; }
+    assert.ok(Array.isArray(row.loseRanges));
+    row.loseRanges.forEach(function(z){ assert.ok(z.from<=z.to&&z.from>=r.B&&z.to<=r.U); });
+    if(row.loseRanges.length&&row.thresholdRanges.length)
+      assert.ok(row.loseRanges[0].from<=row.thresholdRanges[0].from,'ăn gốc không thể muộn hơn cạn');
+  });
+  /* Lưới mặc định (hưu tăng 5–10%/năm nhanh hơn lãi 4–9%) phải có dòng nào đó vừa thua vừa cạn. */
+  const anyBoth=r.rows.some(function(row){return row.months>=180&&row.loseRanges.length>0&&row.thresholdRanges.length>0;});
+  assert.ok(anyBoth,'lưới mặc định phải có dòng vừa có mốc thua vừa có mốc cạn');
+});
+
 test('compare: migrate v9 điền compareCfg im lặng cho bản cũ, giữ cấu hình bản mới',()=>{
   const c=fresh(1);
   const old=JSON.parse(JSON.stringify(c.state));delete old.compareCfg;

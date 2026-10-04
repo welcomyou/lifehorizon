@@ -104,7 +104,7 @@ function drawMainChart(sim){
   s += '<path d="'+dr+'" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4 4"/>';
   var ds='M'+X(-1).toFixed(1)+','+Y(sim.initial).toFixed(1);
   sonly.nav.forEach(function(v, di){ds+=' L'+X(di).toFixed(1)+','+Y(v).toFixed(1);});
-  s += '<path d="'+ds+'" fill="none" stroke="#92400e" stroke-width="1.75" stroke-dasharray="7 4"><title>Nếu gửi tiết kiệm 100% · lãi '+sonly.rate+'%/năm</title></path>';
+  s += '<path d="'+ds+'" fill="none" stroke="#92400e" stroke-width="1.75" stroke-dasharray="7 4"><title>Nếu gửi tiết kiệm 100% · lãi '+vnNumStr(sonly.rate)+'%/năm</title></path>';
   /* Mốc sự kiện neo đúng THÁNG nổ trên đường NAV danh nghĩa: ▲ thu (dưới đường, chỉ lên) · ▼ chi (trên đường) */
   Object.keys(evByMi).forEach(function(k){
     var mi = +k, evs = evByMi[mi], m = ms[mi];
@@ -430,7 +430,7 @@ function renderSimulationResults(vs){
     var _all=pensionStarts();   /* M1: những người đang có mức hưu > 0 */
     if(!state.extraPeople.length){
       $('rPension').textContent = fmtTr(_ps.amount*pensionFactor(_psIdx,NOW,state.infl))+'/tháng';
-      $('rPensionS').textContent = 'dự kiến tại tháng hưởng · từ T'+(_ps.startMonth||1)+'/'+_ps.startYear+' · +'+_ps.growth+'%/năm sau đó';
+      $('rPensionS').textContent = 'dự kiến tại tháng hưởng · từ T'+(_ps.startMonth||1)+'/'+_ps.startYear+' · +'+vnNumStr(_ps.growth)+'%/năm sau đó';
     } else if(!_all.length){
       $('rPension').textContent = '0 đ/tháng';
       $('rPensionS').textContent = state.extraPeople.length+1+' người trong gia đình — chưa ai có mức hưu > 0';
@@ -445,13 +445,13 @@ function renderSimulationResults(vs){
   } else {
     $('rPension').textContent = sim.doLump ? fmtTr(s.lumpAmt)+' (1 lần)' : (s.eligible ? fmtTr(s.pension)+'/tháng' : 'Không đủ 15 năm');
     $('rPensionS').textContent = sim.doLump ? ('rút tại '+ymToStr(s.lumpMonth)+' · không còn lương hưu') :
-      (s.eligible ? 'ước tính từ luật · từ '+ymToStr(s.retireIdx)+' · +'+state.pensionIdx+'%/năm · tỷ lệ '+s.rate+'%' : 'chưa đủ điều kiện');
+      (s.eligible ? 'ước tính từ luật · từ '+ymToStr(s.retireIdx)+' · +'+vnNumStr(state.pensionIdx)+'%/năm · tỷ lệ '+vnNumStr(s.rate)+'%' : 'chưa đủ điều kiện');
   }
   var lastY = sim.years[sim.years.length-1];
   $('rEndW').textContent = fmtTr(lastY.end.total);
   $('rEndWS').textContent = 'gồm cả BĐS';
   $('rReal').textContent = fmtTr(lastY.real);
-  $('rRealS').textContent = 'đã chiết khấu lạm phát '+state.infl+'%/năm';
+  $('rRealS').textContent = 'đã chiết khấu lạm phát '+vnNumStr(state.infl)+'%/năm';
   $('rLiq').textContent = fmtTr(lastY.end.liquid);
   $('rLiqS').textContent = 'Sau rút sớm tiết kiệm, chưa gồm BĐS '+fmtTr(lastY.end.land);
   function runOutAge(simX){ return simX.firstShort>=0 ? (ageAt(simX.firstShort)+' tuổi ('+ymToStr(simX.firstShort)+')') : 'không thiếu chi'; }

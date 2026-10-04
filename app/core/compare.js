@@ -212,7 +212,10 @@ function compareOptimize(cfg, person){
 
 /* ===== Lưới 4 biến: với TỪNG số năm tiếp tục đóng N (bước 1 năm, từ 0 tới mốc
    tổng năm đóng full 75% của giới tính — KỂ CẢ phần chưa đủ 15 năm), quét ba khoảng giả định cấu hình
-   được để đếm tỷ lệ tổ hợp đã cạn khoản tiết kiệm thay thế tại TỪNG tháng tuổi.
+   được để đếm tỷ lệ tổ hợp tại TỪNG tháng tuổi theo HAI mốc của sổ tiết kiệm thay thế:
+   (1) "thua" — tháng đầu lãi sổ sinh ra ít hơn lương hưu phải rút, sổ bắt đầu ăn vào gốc
+   (người chỉ tiêu đúng bằng lương hưu; lãi tháng nào dư thì Ở LẠI sổ sinh lãi tiếp — tái đầu tư);
+   (2) "cạn" — tháng đầu sổ không còn đủ rút bằng lương hưu của tháng đó.
    MỌI tháng trong lịch đóng đã nhập ở Tab 3 được so với gửi tiết kiệm đúng khoản tiền tương ứng
    từ từng tháng đó, kể cả tháng quá khứ trong giả định phản thực. N năm đóng thêm bắt đầu sau
    tháng cuối cùng của lịch ấy (hoặc NOW nếu lịch đã kết thúc). N=0 vẫn so TOÀN BỘ lịch đã nhập
@@ -277,7 +280,8 @@ function compareYearsScan(cfg, person){
   var floorOK = compMonths >= 240 && isFinite(first) && first < 2025*12 + 6;
   var rows = [];
   for(var N = 0; N <= nMaxYears; N++) rows.push({ N:N, months:monthsCommon + N*12, totalYears:(monthsCommon + N*12)/12,
-    winCounts:new Uint16Array(U - B + 1), thresholdRanges:[], peakRanges:[], peakCount:0,
+    winCounts:new Uint16Array(U - B + 1), loseCounts:new Uint16Array(U - B + 1),
+    thresholdRanges:[], loseRanges:[], peakRanges:[], peakCount:0,
     someRanges:[], allRanges:[], scenariosWithWin:0 });
   var contribRate = Math.max(0, Math.min(100, cfg.contribRate)) / 100;
   var oldInfl = state.infl;
@@ -314,8 +318,11 @@ function compareYearsScan(cfg, person){
         perN[N2] = { pension:pensionN, cArr:cArr.slice(0, Math.min(spanU, N2*12)) };
       }
       /* Trước nghỉ hưu: mọi khoản đóng trong lịch Tab 3 và N năm đều có đối ứng gửi tiết kiệm.
-         Từ B: rút mỗi tháng đúng bằng TOÀN BỘ lương hưu của phương án đóng N năm. Mốc "thua" là tháng đầu sổ không đủ
-         rút khoản đó. Sau khi cạn, kịch bản vẫn được tính là thua ở các tuổi muộn hơn. */
+         Từ B: sổ sinh lãi trên TOÀN BỘ số dư rồi rút ra đúng bằng lương hưu của tháng đó — người chỉ
+         tiêu đúng bằng lương hưu nên lãi dư ở lại sổ sinh lãi tiếp (tái đầu tư), lãi thiếu thì ăn vào gốc.
+         Hai mốc mỗi kịch bản: "thua" = tháng đầu lãi < hưu rút (số dư bắt đầu giảm — đã giảm thì giảm
+         dần đều vì hưu không bao giờ giảm nên không phục hồi); "cạn" = tháng đầu số dư âm. Sau khi cạn,
+         kịch bản vẫn được tính là thua ở các tuổi muộn hơn. */
       for(var xi = 0; xi < xVals.length; xi++){
         var monthlySave = Math.pow(1 + xVals[xi]/100, 1/12);
         var commonSavings = 0;
@@ -332,15 +339,18 @@ function compareYearsScan(cfg, person){
           }
           var savingsAtRetirement = commonSavings + extraSavingsAtRetirement;
           for(var yi = 0; yi < yVals.length; yi++){
-            var balance = savingsAtRetirement, pensionGrowth = pensionFactors[yi];
+            var balance = savingsAtRetirement, pensionGrowth = pensionFactors[yi], lostAt = -1;
             for(var su = 0; su < row.winCounts.length; su++){
+              var prev = balance;
               balance = balance * monthlySave - cand.pension * pensionGrowth[su];
+              if(lostAt < 0 && balance < prev) lostAt = su;   // lãi tháng đầu ít hơn hưu rút — ăn vào gốc
               if(balance < 0){
                 row.winCounts[su]++;       // lưu số kịch bản cạn lần đầu; cộng dồn bên dưới
                 row.scenariosWithWin++;
                 break;
               }
             }
+            if(lostAt >= 0) row.loseCounts[lostAt]++;     // cộng dồn bên dưới cùng winCounts
           }
         }
       }
@@ -364,8 +374,11 @@ function compareYearsScan(cfg, person){
       row.allRanges = intervals(row.winCounts, combos);
       for(var j = 0; j < row.winCounts.length; j++) row.peakCount = Math.max(row.peakCount, row.winCounts[j]);
       if(row.peakCount > 0) row.peakRanges = intervals(row.winCounts, row.peakCount);
+      for(var su2 = 1; su2 < row.loseCounts.length; su2++) row.loseCounts[su2] += row.loseCounts[su2-1];
+      row.loseRanges = intervals(row.loseCounts, targetCount);   // cùng ngưỡng với mốc cạn
     }
     delete row.winCounts;
+    delete row.loseCounts;
   });
   return { ok:true, rows:rows, combos:combos, nMaxYears:nMaxYears, monthsPast:monthsPast, monthsCommon:monthsCommon, M0:M0,
            capY:capY, retireIdx:retIdx, B:B, U:U, floorOK:floorOK, threshold:threshold, step:step,

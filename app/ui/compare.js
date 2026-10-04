@@ -8,8 +8,8 @@ function cmpReadGrid(){
   var v = {};
   for(var j = 0; j < cmpGridIds.length; j++){
     var key = cmpGridIds[j], el = $('cmp' + key.charAt(0).toUpperCase() + key.slice(1));
-    if(!el || el.value.trim() === '' || !isFinite(Number(el.value))) return {error:'Điền đủ các khoảng giả định và ngưỡng tỷ lệ.'};
-    v[key] = Number(el.value);
+    if(!el || el.value.trim() === '' || isNaN(numParseVN(el.value))) return {error:'Điền đủ các khoảng giả định và ngưỡng tỷ lệ.'};
+    v[key] = numParseVN(el.value);
   }
   if([.25,.5,1].indexOf(v.gridStep) < 0) return {error:'Chọn bước khảo sát hợp lệ.'};
   if(!Number.isInteger(v.winThreshold) || v.winThreshold < 1 || v.winThreshold > 100)
@@ -59,7 +59,9 @@ function cmpWrite(){
   var defaults = newCompareCfg();
   cmpGridIds.forEach(function(key){
     var el = $('cmp' + key.charAt(0).toUpperCase() + key.slice(1));
-    el.value = c[key] === undefined ? defaults[key] : c[key];
+    var val = c[key] === undefined ? defaults[key] : c[key];
+    /* gridStep là select (giá trị option "0.25") — giữ nguyên chuỗi, không vnNumStr */
+    el.value = key === 'gridStep' ? String(val) : vnNumStr(val);
   });
   cmpGridSummary();
   cmpGridKey = null;
@@ -116,13 +118,19 @@ function cmpRunYearsGrid(){
     try{
       var g = compareYearsScan(Object.assign({}, state.compareCfg, {contribRate:22,maxAge:100}), person);
       if(!g.ok){ out.innerHTML = '<p class="cmp-error">' + esc(g.error || 'Chưa thể tính từ hồ sơ BHXH đang chọn.') + '</p>'; return; }
-      var html = '<p class="hint">“Cạn” là tháng đầu sổ tiết kiệm không đủ để rút bằng lương hưu của tháng đó. Trước khi nhận hưu, sổ chỉ sinh lãi.</p>';
-      html += '<div class="strategy-table-wrap"><table class="cmp-table"><tr><th>Đóng tiếp</th><th>Tổng thời gian BHXH</th><th>Từ tuổi nào sổ cạn? (≥ ' + g.threshold + '% giả định)</th></tr>';
+      var html = '<p class="hint">Người chỉ tiêu đúng bằng lương hưu: tháng nào lãi dư thì phần dư ở lại sổ sinh lãi tiếp, lãi thiếu thì lấy gốc bù. “Bị ăn vào gốc” là tuổi từ đó lãi sổ sinh ra mỗi tháng ít hơn lương hưu phải rút — sổ bắt đầu hao gốc; “cạn” là tuổi sổ không còn đủ rút bằng lương hưu của tháng đó. Cả hai mốc đếm theo ngưỡng ít nhất ' + g.threshold + '% số tổ hợp giả định.</p>';
+      html += '<div class="strategy-table-wrap"><table class="cmp-table"><tr><th>Đóng tiếp</th><th>Tổng thời gian BHXH</th><th>Tuổi TK bị ăn vào gốc</th><th>Tuổi TK cạn</th></tr>';
       g.rows.forEach(function(row){
         html += '<tr><td data-label="Đóng tiếp"><b>' + row.N + ' năm</b></td><td data-label="Tổng BHXH nếu đóng tiếp">' + cmpYears(row.months) + '</td>';
-        if(row.months < 180) html += '<td class="cmp-none" data-label="Mốc cạn">Chưa đủ 15 năm để nhận lương hưu; chưa so quyền lợi khác.</td>';
-        else html += '<td data-label="Mốc cạn trong ít nhất ' + g.threshold + '% giả định" class="' + (row.thresholdRanges.length ? 'cmp-yes' : 'cmp-none') + '">' +
-          (row.thresholdRanges.length ? 'Từ ' + cmpAge(row.thresholdRanges[0].from, person) : 'Chưa đạt ngưỡng trước 100 tuổi') + '</td>';
+        if(row.months < 180){
+          html += '<td class="cmp-none" data-label="Tuổi TK bị ăn vào gốc">Chưa đủ 15 năm để nhận lương hưu; chưa so quyền lợi khác.</td>';
+          html += '<td class="cmp-none" data-label="Tuổi TK cạn">Chưa đủ 15 năm để nhận lương hưu; chưa so quyền lợi khác.</td>';
+        }else{
+          html += '<td data-label="Tuổi TK bị ăn vào gốc" class="' + (row.loseRanges.length ? 'cmp-yes' : 'cmp-none') + '">' +
+            (row.loseRanges.length ? 'Từ ' + cmpAge(row.loseRanges[0].from, person) : 'Chưa đạt ngưỡng trước 100 tuổi') + '</td>';
+          html += '<td data-label="Tuổi TK cạn" class="' + (row.thresholdRanges.length ? 'cmp-yes' : 'cmp-none') + '">' +
+            (row.thresholdRanges.length ? 'Từ ' + cmpAge(row.thresholdRanges[0].from, person) : 'Chưa đạt ngưỡng trước 100 tuổi') + '</td>';
+        }
         html += '</tr>';
       });
       html += '</table></div><p class="hint">Khảo sát ' + g.combos.toLocaleString('vi-VN') + ' tổ hợp giả định, mỗi tổ hợp có trọng số ngang nhau. Tỷ lệ này không phải xác suất xảy ra.</p>';

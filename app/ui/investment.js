@@ -47,8 +47,8 @@ function renderSeriesChart(boxId, key, title, color){
   var sigmaTip='Ô hiển thị làm tròn 0,1%. Độ biến động chính xác: '+fmtNumVN(meta.sigma*100,4)+'% (năm hóa theo căn 12 của log-return tháng)';
   var s = '<div class="top"><b>'+title+'</b><span class="badge" id="badge-'+key+'">CAGR '+pct(cagrYearly(arr))+'</span>'+
     '<span class="badge live" id="live-'+key+'">kéo để chỉnh</span>'+
-    '<label title="'+esc(cagrTip)+'">CAGR %<input type="number" step="0.5" data-sm="cagr" data-key="'+key+'" value="'+cPct+'"></label>'+
-    '<label title="'+esc(sigmaTip)+'">σ %<input type="number" step="0.5" data-sm="sigma" data-key="'+key+'" value="'+sPct+'"></label>'+
+    '<label title="'+esc(cagrTip)+'">CAGR %<input type="text" inputmode="decimal" class="num" data-sm="cagr" data-key="'+key+'" value="'+vnNumStr(cPct)+'"></label>'+
+    '<label title="'+esc(sigmaTip)+'">σ %<input type="text" inputmode="decimal" class="num" data-sm="sigma" data-key="'+key+'" value="'+vnNumStr(sPct)+'"></label>'+
     '<button type="button" class="btn mini ghost" data-rg="'+key+'" title="Thay đường lợi suất tài sản này bằng kịch bản tháng mới với CAGR mục tiêu">⟳ Sinh chuỗi</button></div>';
   s += '<div class="svgbox"><svg id="svg-'+key+'" viewBox="0 0 '+W+' '+H+'">';
   s += '<rect x="'+L+'" y="'+T+'" width="'+(W-L-R)+'" height="'+(H-T-B)+'" fill="#f8fafc"/>';
@@ -77,7 +77,7 @@ function renderSeriesChart(boxId, key, title, color){
   box.__html = s; box.innerHTML = s;
   box.querySelectorAll('[data-sm]').forEach(function(inp){
     inp.addEventListener('change', function(){
-      var value=+inp.value/100;state.seriesMeta[key][inp.dataset.sm]=value;
+      var value=numParseVN(inp.value)/100;state.seriesMeta[key][inp.dataset.sm]=value;
       var meta=state.seriesMeta[key];if(isFinite(value)&&meta.cagr>=-.65&&meta.cagr<=.8&&meta.sigma>=0&&meta.sigma<=.8)regenerateSeries(key,false);
       scheduleRefresh();
     });

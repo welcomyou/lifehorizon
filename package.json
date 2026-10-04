@@ -9,7 +9,7 @@
     "serve:static": "powershell -NoProfile -File app/_serve.ps1",
     "syntax": "node app/test/_syntax.js",
     "test": "node --test app/test/app.test.js",
-    "golden": "node app/test/golden-run.js compare audit/2026-10-03-cost-aware-rebalance/golden-v11.json",
+    "golden": "node app/test/golden-run.js compare audit/2026-10-04-bhxh-lumpsum/golden-baseline.json",
     "diagnostics": "node app/test/model-diagnostics.js"
   }
 }

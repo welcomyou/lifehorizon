@@ -1,8 +1,7 @@
 'use strict';
 /* [ui/bhxh.js] Tab 3 trọn gói (gia đình nhiều người): card "Gia đình" trên cùng (một dòng mỗi người
-   + dòng tổng), tab con chọn người (#peopleTabs), khối thông tin người (#personMeta), lưới 2 cột —
-   danh sách "Giai đoạn đóng BHXH" bên trái (kéo ⠿) + hộp "Lương hưu" bên phải (nút ⚙ tính từ giai
-   đoạn), khối "Bảo hiểm xã hội" trải bề ngang phía dưới, đồng bộ nguồn mức hưu (applyAutoPensionFor
+   + dòng tổng), tab con chọn người (#peopleTabs), khối thông tin người (#personMeta), danh sách
+   "Giai đoạn đóng BHXH" ở trên (kéo ⠿), hộp "Lương hưu" và kết quả quy đổi ở dưới, đồng bộ nguồn mức hưu (applyAutoPensionFor
    + các handler psAmount/psStart/psMonth/psUsePeriods/psBasisCur/psBasisRet, birthYear/gender/
    startMonth/infl).
    Công thức tính nằm ở core/pension.js — file này chỉ đọc/hiển thị/điều phối.
@@ -64,9 +63,9 @@ function renderPersonMeta(){
   if(!p){
     html=''; wire=null;
   } else {
-    html='<div class="card" style="padding:10px 12px;" data-o="'+objToken(p)+'"><div class="row" style="align-items:end;">'+
+    html='<div class="card" style="padding:10px 12px;" data-o="'+objToken(p)+'"><div class="row person-meta-row" style="align-items:end;">'+
       '<div style="max-width:200px;"><label>Tên</label><input data-f="name" value="'+esc(p.name||'')+'" placeholder="ví dụ: Vợ"></div>'+
-      '<div style="max-width:140px;"><label>Năm sinh</label><input type="number" data-f="birthYear" value="'+p.birthYear+'" min="1900" max="2200"></div>'+
+      '<div style="max-width:140px;"><label>Năm sinh</label><input type="text" inputmode="numeric" class="num" data-f="birthYear" value="'+p.birthYear+'"></div>'+
       '<div style="max-width:120px;"><label>Giới tính</label><select data-f="gender"><option value="male"'+(p.gender!=='female'?' selected':'')+'>Nam</option><option value="female"'+(p.gender==='female'?' selected':'')+'>Nữ</option></select></div>'+
       '<div style="flex:0 0 auto;"><button type="button" class="del" data-f="delPerson" title="Xóa người này khỏi gia đình">✕ Xóa người</button></div></div></div>';
     wire=function(box){
@@ -75,7 +74,7 @@ function renderPersonMeta(){
         if(f==='delPerson')return;
         el.addEventListener('change',function(){
           if(f==='name')p.name=el.value;
-          else if(f==='birthYear')p.birthYear=+el.value;
+          else if(f==='birthYear')p.birthYear=numVal(el);
           else if(f==='gender')p.gender=el.value;
           applyAutoPensionFor(p);   /* đổi năm sinh/giới tính của NGƯỜI NÀY → tính lại hưu tự tính của họ */
           scheduleRefresh();
@@ -106,7 +105,8 @@ function renderPensionDetails(){   /* giữ tên gọi cũ — giờ vẽ chi ti
      tiêu đề ngắn — không mang "của Người X", không "hồ sơ chính" (tab con đầu đã là Người 1) */
   $('periodTitle').innerHTML='Giai đoạn đóng BHXH <span class="badge pchip">👤 '+esc(label)+'</span>';
   $('psCardTitle').innerHTML='Lương hưu <span class="badge pchip">👤 '+esc(label)+'</span>';
-  $('lawCardTitle').innerHTML='Bảo hiểm xã hội <span class="badge pchip">👤 '+esc(label)+'</span>';
+  $('lawCardTitle').innerHTML='Lương hưu quy đổi <span class="badge pchip">👤 '+esc(label)+'</span>';
+  $('periodAdjHint').textContent='“Sau bù trượt giá”: bình quân lương đóng của giai đoạn tại năm hưởng hưu '+Math.floor(s.retStart/12)+'; đã tính tăng lương và giới hạn đóng.';
   var warn = $('orderWarn');
   var warnBits=[];
   if(!orderConsistent(P)) warnBits.push('<span>⚠ Thứ tự / thời gian các giai đoạn chưa khớp.</span><button class="btn mini" id="sortBtn">Sắp xếp theo thời gian</button>');
@@ -116,13 +116,13 @@ function renderPensionDetails(){   /* giữ tên gọi cũ — giờ vẽ chi ti
   /* Dòng đạt/thiếu tháng tối thiểu (180 tháng — thay hint tĩnh theo yêu cầu): theo người đang chọn */
   var mh = $('bhxhMonthsHint');
   if(mh){
-    mh.innerHTML = (s.months >= 180)
-      ? 'Đã đạt <b>'+s.months+'/180 tháng</b> — đủ điều kiện hưởng lương hưu.'
-      : 'Đã đạt <b>'+s.months+'/180 tháng</b> — còn thiếu <b>'+(180-s.months)+' tháng</b> để hưởng lương hưu.';
+    mh.innerHTML = s.months===0 ? 'Chưa có tháng đóng BHXH.' : (s.months >= 180)
+      ? 'Theo các giai đoạn đã nhập: <b>'+s.months+' tháng đóng</b> · đạt mốc 180 tháng.'
+      : 'Theo các giai đoạn đã nhập: <b>'+s.months+' tháng đóng</b> · còn thiếu <b>'+(180-s.months)+' tháng</b> để đạt 180.';
   }
   var sb=$('sortBtn'); if(sb) sb.onclick = function(){ P.sort(function(a,b){ return parseYM(a.from)-parseYM(b.from); }); refresh(); };
   /* comment phân biệt người để diff refreshList nhận ra đổi người khi HTML trùng dạng */
-  var html = '<!--nguoi:'+state.activePerson+'--><div class="period head"><div></div><div>Từ tháng/năm</div><div>Đến tháng/năm</div><div>Số tháng</div><div>Làm việc tại</div><div>Lương đóng BH</div><div>Tăng%</div><div></div></div>';
+  var html = '<!--nguoi:'+state.activePerson+'--><div class="period head"><div></div><div>Từ tháng/năm</div><div>Đến tháng/năm</div><div>Số tháng</div><div>Làm việc tại</div><div>Lương đóng BHXH</div><div>Tăng lương %/năm</div><div>Sau bù trượt giá</div><div></div></div>';
   var retIdxRow = retireAgeMonths(personBirth(person), personGender(person));
   function rowMonths(p){
     /* Số tháng đóng của RIÊNG dòng này: từ tháng "Từ" đến hết tháng "Đến" (trống = đến tháng đủ
@@ -142,7 +142,8 @@ function renderPensionDetails(){   /* giữ tên gọi cũ — giờ vẽ chi ti
       '<div><input type="text" disabled tabindex="-1" title="Tự tính từ Từ/Đến tháng — không sửa trực tiếp" aria-label="Số tháng, giai đoạn '+(i+1)+' của '+esc(label)+'" value="'+(rm===null?'—':rm)+'"></div>'+
       '<div><select data-f="type" data-i="'+i+'">'+ ['dn','nn','tn','none'].map(function(k){ return '<option value="'+k+'"'+(p.type===k?' selected':'')+'>'+TYPES[k].label+'</option>'; }).join('') +'</select></div>'+
       '<div><input type="text" inputmode="numeric" class="money" value="'+fmtMoney(p.bh)+'" data-f="bh" data-i="'+i+'"></div>'+
-      '<div><input type="number" value="'+p.growth+'" step="0.5" data-f="growth" data-i="'+i+'"></div>'+
+      '<div><input type="text" inputmode="decimal" class="num" value="'+vnNumStr(p.growth)+'" data-f="growth" data-i="'+i+'"></div>'+
+      '<div><input type="text" class="period-adjusted" disabled tabindex="-1" title="Bình quân lương đóng của giai đoạn, quy về năm bắt đầu hưởng hưu" aria-label="Sau bù trượt giá, giai đoạn '+(i+1)+' của '+esc(label)+'" value="'+(s.periodAdjusted[i]===null?'—':fmtMoney(s.periodAdjusted[i]))+'"></div>'+
       '<div><button class="del" data-i="'+i+'" aria-label="Xóa giai đoạn đóng '+(i+1)+' của '+esc(label)+'">✕</button></div></div>';
   });
   refreshList('periodList', html, function(box){
@@ -200,7 +201,7 @@ function renderPensionDetails(){   /* giữ tên gọi cũ — giờ vẽ chi ti
         var f = el.dataset.f;
         if(f === 'type') p.type = el.value;
         else if(f === 'bh') p.bh = moneyVal(el);
-        else if(f === 'growth') p.growth = +el.value;
+        else if(f === 'growth') p.growth = numVal(el);
         else if(f === 'from' || f === 'to'){
           var raw = strTrim(el.value);
           var norm = (raw === '' && f === 'to') ? '' : parseYMFlexible(raw, hintYearFor(p, f, P));
@@ -237,27 +238,15 @@ function renderPensionDetails(){   /* giữ tên gọi cũ — giờ vẽ chi ti
   var ps = activePension(), psStart = pensionStartOf(ps).start;
   var pr = {psStart:psStart, p0:ps.amount>0 ? ps.amount*pensionFactor(psStart,NOW,state.infl) : 0};
   function moneyText(v){ return fmtTr(v).replace('trđ','triệu đ'); }
-  var inflPct=String(state.infl).replace('.',','), growthPct=String(ps.growth).replace('.',',');
   /* Đ2 — nhãn nguồn mức hưu NGAY CẠNH ô tiền (nhập tay / tính từ giai đoạn đóng / trống / chưa xác nhận nghĩa) */
   var chip = $('psSourceChip');
   if(chip){
+    chip.style.display=ps.amount>0?'':'none';
     if(ps.amountBasis === 'unknown'){ chip.className='badge src-warn'; chip.textContent='⚠ chưa xác nhận nghĩa số cũ'; }
-    else if(ps.amountSource === 'fromPeriods'){ chip.className='badge src-auto'; chip.textContent='⚙ tính từ giai đoạn đóng'; }
+    else if(ps.amountSource === 'fromPeriods'){ chip.className='badge src-auto'; chip.textContent='⚙ tự tính'; }
     else if(ps.amount > 0){ chip.className='badge src-manual'; chip.textContent='✎ nhập tay'; }
     else { chip.className='badge src-empty'; chip.textContent='○ trống'; }
   }
-  /* Dòng quy đổi gọn dưới ô tiền; dùng cùng hệ số như mô phỏng. */
-  var cv = $('psConvertLine');
-  if(cv){
-    cv.innerHTML = ps.amount > 0
-      ? '≈ <b>'+fmtTr(pr.p0)+'/tháng tại '+ymToStr(pr.psStart)+'</b> — đã gồm lạm phát '+inflPct+'%/năm từ '+fmtTr(ps.amount)+' giá hiện tại; sau đó +'+growthPct+'%/năm mỗi 12 tháng.'
-      : 'Nhập mức hưu <b>theo giá hiện tại</b> — phần mềm tự quy đổi lạm phát đến tháng hưởng, hoặc bấm ⚙ phía trên để tính từ giai đoạn đóng.';
-  }
-  /* Đ7 — "Hướng dẫn chi tiết" LUÔN bung (ép open mỗi lần render) + chèn số % tăng của người đang xem
-     vào hai đoạn (thay cho chữ "Tăng %/năm" chung chung). */
-  var gd = $('psGuide');
-  if(gd){ gd.open = true; }
-  Array.prototype.forEach.call(document.querySelectorAll('.gdGrowth'), function(el){ el.textContent = growthPct + '%/năm'; });
   /* Banner xác nhận nghĩa bản lưu cũ (bàn giao mục 7.2): không suy đoán từ số tiền — hỏi người dùng */
   var ask = $('psBasisAsk');
   if(ask) ask.style.display = (ps.amount > 0 && ps.amountBasis === 'unknown') ? '' : 'none';
@@ -272,41 +261,32 @@ function renderPensionDetails(){   /* giữ tên gọi cũ — giờ vẽ chi ti
   $('kUseAmtS').textContent=retired
     ? 'Mô phỏng từ '+ymToStr(NOW)+' · Đã nhận từ '+ymToStr(psStart)+'.'
     : 'Nhận từ '+ymToStr(psStart)+' · '+personAgeAt(person,psStart)+' tuổi.';
-  $('kUseGrowth').innerHTML=growthPct+'% <span class="pension-unit">/năm</span>';
-  $('kUseGrowthS').textContent=+ps.growth===0?'Giả định giữ nguyên mức hưu sau khi nhận.'
-    : 'Giả định tăng sau mỗi 12 tháng'+(retired?' kể từ '+ymToStr(NOW):' nhận hưu')+'.';
   $('kUseNotice').textContent=unknown
-    ? 'Xác nhận nghĩa mức tiền trong ô “Lương hưu” phía trên để xem kết quả.'
-    : 'Chưa có mức hưu. Nhập ở ô “Lương hưu” hoặc bấm nút tính từ giai đoạn đóng phía trên.';
+    ? 'Xác nhận nghĩa số tiền phía trên để xem kết quả.'
+    : 'Chưa có mức hưu để quy đổi.';
   $('kUseNotice').style.display=hasAmount?'none':'';
 }
-/* Đ3 — tổng hợp gia đình (card ĐẦU Tab 3): một dòng mỗi người — tên · giới tính · năm sinh ·
-   nghỉ hưu (tuổi) · nguồn & mức hưu (giá hiện tại + giá trị tương lai tại tháng hưởng của họ);
-   dòng tổng khi cả nhà cùng hưởng. Mức "tương lai" của từng người quy đổi tại tháng hưởng riêng. */
+/* Tổng hợp gia đình: mỗi người có mốc nghỉ, nguồn hưu, mức theo giá hiện tại và mức lúc nhận;
+   chỉ cộng các mức theo giá hiện tại khi có ít nhất hai người có hưu. */
 function renderFamilySummary(){
   var el=$('familyLines'); if(!el)return;
-  var totAmt=0, totP0=0, lastIdx=-1;
+  var totAmt=0, amtCount=0;
   function row(p,pi){
     var ps=p?p.pension:state.pensionSimple, pr=pensionProjection(ps);
     var retIdx=retireAgeMonths(personBirth(p),personGender(p));
     var h='<b>'+esc(personLabel(p,pi))+'</b> · '+(personGender(p)==='male'?'Nam':'Nữ')+' · sinh '+personBirth(p)+
       ' · nghỉ hưu '+ymToStr(retIdx)+' ('+personAgeAt(p,retIdx)+' tuổi)';
     if(ps.amount>0){
-      totAmt+=ps.amount; totP0+=pr.p0; if(pr.psStart>lastIdx)lastIdx=pr.psStart;
-      h+=' · lương hưu '+(ps.amountSource==='fromPeriods'?'tính từ giai đoạn đóng':'nhập tay')+' '+fmtMoney(ps.amount)+' đ (≈ '+fmtMoney(pr.p0)+' đ giá trị tương lai)';
+      totAmt+=ps.amount; amtCount++;
+      h+=' · hưu '+(ps.amountSource==='fromPeriods'?'tự tính':'nhập tay')+' '+fmtMoney(ps.amount)+' đ/tháng (giá hiện tại) → ≈ '+fmtMoney(pr.p0)+' đ/tháng '+(pr.psStart<NOW?'tại '+ymToStr(NOW):'khi nhận');
       if(pr.psStart!==retIdx) h+=' · nhận từ '+ymToStr(pr.psStart);   /* đợt 13: mốc quy ước = tháng đủ tuổi */
     } else h+=' · chưa có mức hưu';
     return '<div class="kv"><span>'+h+'</span></div>';
   }
   var html=row(null,0);
   state.extraPeople.forEach(function(p,i){ html+=row(p,i); });
-  if(state.extraPeople.length){
-    if(totAmt>0) html+='<div class="kv" style="border-top:1px dashed var(--line);margin-top:4px;padding-top:6px;">'+
-      '<span><b>Tổng hưu khi cả nhà cùng hưởng'+(lastIdx>=0?' (từ '+ymToStr(lastIdx)+')':'')+'</b></span>'+
-      '<b>'+fmtMoney(totAmt)+' đ/tháng (≈ '+fmtMoney(totP0)+' đ giá trị tương lai)</b></div>';
-  } else {
-    html+='<div class="hint" style="margin-top:4px;">Hiện chỉ có người chính — bấm <b>＋ Thêm người</b> để thêm vợ/chồng: mỗi người có giai đoạn đóng, mốc hưởng và mức hưu riêng; mô phỏng cộng hưu vào đúng tháng từng người bắt đầu nhận.</div>';
-  }
+  if(amtCount>1) html+='<div class="kv" style="border-top:1px dashed var(--line);margin-top:4px;padding-top:6px;">'+
+    '<span><b>Tổng các mức hưu theo giá hiện tại</b></span><b>'+fmtMoney(totAmt)+' đ/tháng</b></div>';
   el.innerHTML=html;
 }
 
@@ -317,7 +297,7 @@ function writePensionInputs(){
   var ps=activePension();
   $('psAmount').value=fmtMoney(ps.amount);
   $('psAmount').dataset.good=String(Math.round(ps.amount));
-  $('psStart').value=ps.startYear;$('psMonth').value=ps.startMonth===undefined?1:ps.startMonth;$('psGrowth').value=ps.growth;
+  $('psStart').value=ps.startYear;$('psMonth').value=ps.startMonth===undefined?1:ps.startMonth;$('psGrowth').value=vnNumStr(ps.growth);
 }
 /* M1 — chuyển tab con / thêm người mới trong Tab 3 */
 function switchPerson(i){
@@ -362,7 +342,7 @@ $('periodList').addEventListener('drop', function(ev){
    thêm), đổi tháng gốc mô phỏng (NOW) hoặc đổi lạm phát. Quy tắc nguồn (bảng mục 5 bàn giao +
    review F02/F04 11/09):
    - Mức NHẬP TAY (amountSource 'manual', amount > 0) KHÔNG bao giờ bị ghi đè bởi dữ liệu tham khảo —
-     người dùng phải chủ động bấm “⚙ Tính toán lương hưu từ các giai đoạn” (force).
+     người dùng phải chủ động bấm “⚙ Tính hưu từ giai đoạn đóng” (force).
    - Tự điền/ cập nhật khi nguồn đã là fromPeriods, hoặc ô còn trống (amount = 0): ghi mức quy về giá
      hiện tại (full precision — không đọc lại số làm tròn trên giao diện) + tháng hưởng + nguồn, giữ
      nguyên “Tăng %/năm” người dùng nhập.
@@ -461,6 +441,57 @@ $('psUsePeriods').onclick = function(){
   }
   applyAutoPensionFor(person, true);
   refresh();
+};
+/* Nút "Tính giá trị rút BHXH 1 lần": popup mức hưởng ước tính theo khoản 3
+   Điều 70 Luật BHXH 41/2024 (tự nguyện: Điều 102) cho NGƯỜI ĐANG CHỌN ở tab con. Công thức nằm ở
+   core/pension.js (bhxhLumpSum) — file này chỉ đọc/hiển thị; không ghi state. Điều kiện hưởng
+   (khoản 1) là dữ kiện cá nhân app không kiểm tra được → chỉ nêu để người dùng tự đối chiếu. */
+$('psLumpSum').onclick = function(){
+  var person=activePersonObj(), label=personLabel(person,state.activePerson-1);
+  var r = bhxhLumpSum(person);
+  if(!r.ok){
+    appDialog({ title:r.reason==='invalid'?'Giai đoạn đóng còn lỗi':'Chưa có tháng đóng BHXH',
+      html:r.reason==='invalid'
+        ? 'Giai đoạn đóng của <b>'+esc(label)+'</b> còn lỗi định dạng tháng hoặc lương đóng — sửa các dòng được báo lỗi ở bảng “Giai đoạn đóng BHXH” rồi bấm lại. Chưa tính được mức rút.'
+        : '<b>'+esc(label)+'</b> chưa có giai đoạn đóng BHXH hợp lệ nào. Thêm giai đoạn ở bảng “Giai đoạn đóng BHXH” rồi bấm lại.',
+      okText:'Đã hiểu' });
+    return;
+  }
+  function yrTxt(v){ return fmtNumVN(v, Number.isInteger(v) ? 0 : Number.isInteger(v*2) ? 1 : 2); }
+  function mTxt(m){ var y=Math.floor(m/12), r2=m%12; return (y?y+' năm':'')+(y&&r2?' ':'')+(r2?r2+' tháng':''); }
+  var L=r.split, estimateYear=Math.floor(Math.max(NOW,r.eligMonth)/12);
+  var calculation = r.underOneYear
+    ? '22% tổng lương/thu nhập đã đóng'+(r.capped ? ', giới hạn 2 tháng bình quân' : '')
+    : yrTxt(r.monthlyCount)+' tháng bình quân × '+fmtMoney(r.avg)+' đ';
+  var split = r.underOneYear
+    ? '22% tổng lương/thu nhập đã đóng = '+fmtMoney(r.paid22)+' đ; tối đa 2 tháng bình quân = '+fmtMoney(2*r.avg)+' đ.'
+    : (L.yearsPre ? yrTxt(L.yearsPre)+' năm trước 2014 × 1,5' : '')+
+      (L.yearsPre && L.yearsPool ? ' + ' : '')+
+      (L.yearsPool ? yrTxt(L.yearsPool)+' năm '+(r.monthsPost ? 'từ 2014' : 'tháng lẻ trước 2014')+' × '+yrTxt(L.poolRate) : '')+
+      ' = '+yrTxt(r.monthlyCount)+' tháng bình quân.'+
+      (r.monthsPre%12 && r.monthsPost ? ' '+r.monthsPre%12+' tháng lẻ trước 2014 được gộp vào giai đoạn sau.' : '');
+  var warns=[];
+  if(r.overlapMonths>0) warns.push(r.overlapMonths+' tháng đóng trùng chỉ tính một lần.');
+  if(r.openRows>0) warns.push('Dòng chưa nhập “Đến tháng” được tính đến '+ymToStr(r.retireIdx)+'.');
+  var html='<div class="lsum-hero">'+
+      '<div class="lsum-caption">Số tiền ước tính</div>'+
+      '<div class="lsum-amount">'+fmtMoney(r.amount)+' <small>đ</small></div>'+
+      '<div class="lsum-date">Theo giá trị dự kiến năm '+estimateYear+' · đóng đến '+ymToStr(r.lastEnd)+'</div>'+
+    '</div>'+
+    '<div class="lsum-facts">'+
+      '<div><span>Đã đóng</span><b>'+mTxt(r.months)+'</b></div>'+
+      '<div><span>Lương/thu nhập bình quân</span><b>'+fmtMoney(r.avg)+' đ/tháng</b></div>'+
+      '<div><span>Cách tính</span><b>'+calculation+'</b></div>'+
+    '</div>'+
+    '<div class="lsum-caution">Đây là mức ước tính, chưa xác nhận bạn đủ điều kiện nhận BHXH một lần.</div>'+
+    (warns.length ? '<div class="lsum-warnings">'+warns.map(function(w){ return '⚠ '+esc(w); }).join('<br>')+'</div>' : '')+
+    '<details class="lsum-more"><summary>Điều kiện và cách tính chi tiết</summary>'+
+      '<div class="lsum-more-body">'+
+        '<b>Phép tính:</b> '+split+' Tổng '+r.months+' tháng đóng (trước 2014: '+r.monthsPre+'; từ 2014: '+r.monthsPost+').<br>'+
+        '<b>Khi nào được rút?</b> Nếu đã tham gia trước 01/07/2025 và đóng chưa đủ 20 năm, trường hợp nghỉ đóng cần đủ 12 tháng không tham gia BHXH trước khi nộp hồ sơ; theo lịch nhập, mốc chờ dự kiến là '+ymToStr(r.eligMonth)+'. Các trường hợp đủ tuổi hưu nhưng chưa đủ 15 năm, định cư nước ngoài, bệnh theo luật, suy giảm khả năng lao động từ 81% hoặc khuyết tật đặc biệt nặng có điều kiện riêng; một số quân nhân, công an xuất ngũ cũng có thể được hưởng.<br>'+
+        '<b>Giả định:</b> Hệ số điều chỉnh tiền lương/thu nhập của năm '+estimateYear+' được dự phóng theo lạm phát đã nhập nếu chưa công bố. Cơ quan BHXH tính mức thực tế theo thời điểm ra quyết định. App chưa tính phần Nhà nước hỗ trợ đóng BHXH tự nguyện; phần này được tính trong một số trường hợp bệnh hoặc suy giảm khả năng lao động theo Điều 70.</div>'+
+    '</details>';
+  appDialog({ title:'Rút BHXH một lần · '+label, html:html, okText:'Đóng', cls:'lsum' });
 };
 /* Xác nhận nghĩa mức hưu của bản lưu cũ (migration v3 — bàn giao mục 7.2): KHÔNG suy đoán từ số tiền.
    M1: áp cho hộp của người đang chọn. */
