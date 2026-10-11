@@ -1,12 +1,12 @@
 'use strict';
-/* [state/defaults.js] Định nghĩa trạng thái mặc định (schemaVersion 9 — thêm Tab 8 Tối ưu đóng BHXH: compareCfg what-if độc lập, điền im lặng cho bản cũ) + NOW = tháng gốc mô phỏng.
+/* [state/defaults.js] Định nghĩa trạng thái mặc định (schemaVersion 12 — sinh lãi vay thả nổi) + NOW = tháng gốc mô phỏng.
    Global định nghĩa ở đây: state, defaultState, NOW (setNow neo NOW để kiểm thử).
    Chỉ state/persist.js (loadState) được gán lại toàn cục `state`; UI ghi state qua readInputs/handler. */
 var NOW = (function(){ var d = new Date(); return d.getFullYear()*12 + d.getMonth(); })(); // tháng hiện tại (tự động)
 function setNow(idx){ NOW = idx; if(typeof state!=='undefined')state.startMonth=idx; } // dùng cho kiểm thử: neo NOW về một tháng cố định
 
 var state = {
-  schemaVersion:9, startMonth:NOW, investmentPlan:newInvestmentPlan(NOW), scenarioSeed:20260908, seriesSeeds:{gold:313131,cp:323232,land:333333}, sellRule:'nearPeak', goldSpread:2,
+  schemaVersion:12, startMonth:NOW, investmentPlan:newInvestmentPlan(NOW), scenarioSeed:20260908, seriesSeeds:{gold:313131,cp:323232,land:333333}, sellRule:'nearPeak', goldSpread:2,
   birthYear:1990, gender:'male', simYears:40, infl:5,
   /* M1 (11/09/2026) — gia đình nhiều người: người chính giữ hồ sơ Tab 1 (năm sinh/giới tính) +
      state.periods + state.pensionSimple; mỗi thành viên thêm là một phần tử extraPeople với
@@ -52,6 +52,13 @@ var state = {
   landPlots:[
     {id:'initial-property', label:'Đất vườn', ownYear:null, area:100, total:2500000000, sellable:true, saleYear:null, salePrice:null, rent:true, rentVnd:2000000, rentFromYear:null, rentGrowth:2, expenses:[]}
   ],
+  /* startMonth=null: dư nợ hôm nay; số tháng còn trả tính từ tháng mô phỏng đầu.
+     startMonth có giá trị: giải ngân trong tương lai, kỳ trả đầu ở tháng kế tiếp.
+     plotId: BĐS mua bằng khoản vay (tự ghi chi mua) hoặc BĐS hiện có gắn nợ.
+     rateMode=fixed: rate suốt kỳ; fixed-floating: sau introMonths dùng kịch bản Tab 6. */
+  debts:[],
+  debtFloatingRates:[{fromY:0,rate:8}],
+  debtRateGenerator:{center:8,swing:2},
   rates:{mmf:4.5, tk:6.5, tp:6, tkShort:3, tkMedium:4.5, tpEarlyFee:2, tpMinMonths:12, cpBuyFee:0, cpSellFee:0},
   seriesMeta:{gold:{cagr:.07,sigma:.15},cp:{cagr:.09,sigma:.25},land:{cagr:.06,sigma:.12}},
   series:{gold:[], cp:[], land:[]},

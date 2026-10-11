@@ -3,3 +3,4 @@ require('./simulation.test');
 require('./profile.test');
 require('./strategy.test');
 require('./compare.test');
+require('./debt.test');

@@ -6,7 +6,7 @@
 var INVESTMENT_KEYS=['tk','tp','cp','gold'];
 var INVESTMENT_NAMES={target:'Giữ tỷ trọng mục tiêu',bucket:'Dự phòng theo số tháng chi',glide:'Đổi tỷ trọng dần'};
 var STRATEGY_VERSION=1;
-var STRATEGY_ENGINE_VERSION=11; // v11: giao dịch cân bằng xét chi phí, tránh vòng bán/mua và giữ tiền cho chi đã biết.
+var STRATEGY_ENGINE_VERSION=14; // v14: chi duy tu dừng khi BĐS đã bán (kể cả khẩn cấp, gỡ khỏi dự báo); thanh khoản trừ phí quỹ.
 // v7 lifePlan is the editable source. Older structures remain only for import compatibility.
 // v3 (đợt 63) — income.growth là TỐC ĐỘ TĂNG DANH NGHĨA TỔNG từ tháng gốc: mặc định bằng lạm phát,
 // 0 = đứng nguyên số nhập mọi năm (thu theo giá quy định). v2 cũ: growth là tăng thật SAU lạm phát
@@ -173,6 +173,7 @@ function validateInvestmentPlan(plan,start,horizon){
    and future property sale proceeds are not assumed to fund the reserve). */
 function investmentForecast(withBhxh){
   var n=state.simYears*12,summary=bhxhSummary(),pensioners=[];
+  var debtRows=debtForecast(n);
   if(withBhxh&&state.pensionMode==='simple'){
     pensioners.push(pensionStartOf(state.pensionSimple));
     (state.extraPeople||[]).forEach(function(p){pensioners.push(pensionStartOf(p.pension));});
@@ -186,13 +187,13 @@ function investmentForecast(withBhxh){
       if(state.pensionMode==='simple')pensioners.forEach(function(p){pension+=pensionMonthly(p.amount,p.start,p.growth,state.infl,NOW,m);});
       else if(summary.eligible&&m>=summary.retStart)pension=summary.pension*Math.pow(1+state.pensionIdx/100,Math.floor((m-summary.retStart)/12));
     }
-    rows.push({m:m,salary:income,pension:pension,expense:expensesAtY(y),eventOut:(events[i]||0)+plotExpenseAt(m),eventIn:inflows[i]||0});
+    rows.push({m:m,salary:income,pension:pension,expense:expensesAtY(y),eventOut:(events[i]||0)+plotExpenseAt(m)+debtRows[i].purchase,eventIn:inflows[i]||0,debtPayment:debtRows[i].payment,loanDraw:debtRows[i].draw});
   }
   return rows;
 }
-// Reserve is a stage-specific number of current living-expense months, regardless of income.
+// Reserve covers current living expense and scheduled debt payment, regardless of income.
 function investmentReserve(forecast,mi,n){
-  return (forecast[mi]?forecast[mi].expense:0)*n;
+  return (forecast[mi]?forecast[mi].expense+(forecast[mi].debtPayment||0):0)*n;
 }
 // Recurring cash-flow regimes are suggestions, not automatic changes to an adopted plan.
 function investmentFlowPeriods(){
@@ -200,9 +201,10 @@ function investmentFlowPeriods(){
   rows.forEach(function(r,i){
     var rent=0;state.landPlots.forEach(function(p){
       if(!p.rent||(p.saleYear!=null&&r.m>p.saleYear*12+11))return;
+      if(i===plotOwnIdx(p)&&(state.debts||[]).some(function(d){return d.startMonth!=null&&d.plotId===p.id;}))return;
       rent+=plotRentAt(p,i);
     });
-    var net=r.salary+r.pension+rent-r.expense,type=net>=-1e-6?'surplus':r.pension>0?'pension':'bridge',last=groups[groups.length-1];
+    var net=r.salary+r.pension+rent-r.expense-(r.debtPayment||0),type=net>=-1e-6?'surplus':r.pension>0?'pension':'bridge',last=groups[groups.length-1];
     if(!last||last.type!==type){last={from:r.m,to:r.m,type:type,firstNet:net,lastNet:net};groups.push(last);}
     last.to=r.m;last.lastNet=net;
   });return groups;

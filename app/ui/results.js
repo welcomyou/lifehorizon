@@ -19,7 +19,7 @@ var ASSET_COLORS = {
 /* Màu đường NAV theo nguồn chi chính của TỪNG THÁNG: 6 nhóm tài sản lấy đúng ASSET_COLORS; nhãn không
    phải tài sản (hưu/thu nhập/sự kiện…) dùng tông riêng không trùng màu tài sản. */
 var SRC_COLORS = (function(){
-  var m = {'Lương hưu':'#0d9488','MMF/TK':'#2563eb','Thu nhập':'#4f46e5','Sự kiện':'#db2777','Thu sự kiện':'#0891b2','Tích lũy':'#64748b','KHÔNG ĐỦ':'#dc2626'};
+  var m = {'Lương hưu':'#0d9488','MMF/TK':'#2563eb','Thu nhập':'#4f46e5','Khoản vay':'#475569','Sự kiện':'#db2777','Thu sự kiện':'#0891b2','Tích lũy':'#64748b','KHÔNG ĐỦ':'#dc2626'};
   Object.keys(ASSET_COLORS).forEach(function(k){ m[ASSET_COLORS[k].lab] = ASSET_COLORS[k].c; });
   return m;
 })();
@@ -29,12 +29,14 @@ function drawMainChart(sim){
   var W=1080, H=300, L=70, R=20, T=16, B=46;
   var ms = sim.months || []; if(!ms.length) return;
   var n = ms.length;
-  var sonly=savingsOnlyNav(sim);
+  var hasDebt=(state.debts||[]).length>0,sonly=hasDebt?null:savingsOnlyNav(sim);
+  $('savingsLegend').hidden=hasDebt;
+  $('savingsHint').textContent=hasDebt?'Đường so sánh 100% tiết kiệm được ẩn khi có khoản vay vì phép đối chiếu cũ chưa tính dòng vay và trả nợ.':'Đường 100% tiết kiệm giả định toàn bộ NAV ban đầu thành tiền gửi; không còn BĐS, tiền thuê hoặc tiền bán BĐS về sau.';
   /* R09 — miền trục phải chứa cả điểm NAV BAN ĐẦU (path đã thêm điểm i=-1): khi chi hết ngay tháng đầu
      làm NAV các tháng về 0, điểm đầu vẫn nằm trong vùng vẽ thay vì bay ngoài trục. */
   var maxY = Math.max(1e9, sim.initial || 0);
   ms.forEach(function(m){ maxY = Math.max(maxY, m.total, m.real); });
-  sonly.nav.forEach(function(v){if(v>maxY)maxY=v;});
+  if(sonly)sonly.nav.forEach(function(v){if(v>maxY)maxY=v;});
   /* U03 — trục dành thêm 1 bước bên trái cho điểm NAV BAN ĐẦU (i=-1): thay đổi lớn ngay tháng đầu thấy được */
   function X(i){ return L + (i+1)/n*(W-L-R); }
   function Y(v){ return T + (1-v/maxY)*(H-T-B); }
@@ -59,7 +61,7 @@ function drawMainChart(sim){
     if(keys.length) return DRAW_NAMES[keys[0]] || 'Tích lũy';
     /* R10 — nguồn chính là DÒNG THU LỚN NHẤT của tháng (hưu/lương+thuê/bán BĐS/thu sự kiện),
        không ưu tiên theo sự hiện diện: lương 1 triệu cạnh sự kiện thu 100 triệu không còn được gắn nhãn "Thu nhập". */
-    var flows = [['Lương hưu', m.pension||0], ['Thu nhập', (m.salary||0)+(m.rent||0)], ['BĐS', m.ledger.propertyProceeds||0], ['Thu sự kiện', m.eventIn||0]]
+    var flows = [['Lương hưu', m.pension||0], ['Thu nhập', (m.salary||0)+(m.rent||0)], ['BĐS', m.ledger.propertyProceeds||0], ['Thu sự kiện', m.eventIn||0], ['Khoản vay',m.loanDraw||0]]
       .sort(function(a,b){ return b[1]-a[1]; });
     if(flows[0][1] > 0) return flows[0][0];
     return 'Tích lũy';
@@ -102,9 +104,9 @@ function drawMainChart(sim){
   });
   var dr='M'+X(-1).toFixed(1)+','+Y(sim.initial).toFixed(1); ms.forEach(function(m, di){ dr += ' L'+X(di).toFixed(1)+','+Y(m.real).toFixed(1); });
   s += '<path d="'+dr+'" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4 4"/>';
-  var ds='M'+X(-1).toFixed(1)+','+Y(sim.initial).toFixed(1);
-  sonly.nav.forEach(function(v, di){ds+=' L'+X(di).toFixed(1)+','+Y(v).toFixed(1);});
-  s += '<path d="'+ds+'" fill="none" stroke="#92400e" stroke-width="1.75" stroke-dasharray="7 4"><title>Nếu gửi tiết kiệm 100% · lãi '+vnNumStr(sonly.rate)+'%/năm</title></path>';
+  if(sonly){var ds='M'+X(-1).toFixed(1)+','+Y(sim.initial).toFixed(1);
+    sonly.nav.forEach(function(v, di){ds+=' L'+X(di).toFixed(1)+','+Y(v).toFixed(1);});
+    s += '<path d="'+ds+'" fill="none" stroke="#92400e" stroke-width="1.75" stroke-dasharray="7 4"><title>Nếu gửi tiết kiệm 100% · lãi '+vnNumStr(sonly.rate)+'%/năm</title></path>';}
   /* Mốc sự kiện neo đúng THÁNG nổ trên đường NAV danh nghĩa: ▲ thu (dưới đường, chỉ lên) · ▼ chi (trên đường) */
   Object.keys(evByMi).forEach(function(k){
     var mi = +k, evs = evByMi[mi], m = ms[mi];
@@ -152,8 +154,8 @@ function drawMainChart(sim){
       var i = Math.max(0, Math.min(n-1, Math.round((vx-L)/(W-L-R)*n)-1)); /* U03: trục đã dịch 1 bước cho điểm ban đầu */
       var a = ms[i], mc = srcColor(srcByMi[i]);
       hl.setAttribute('x1', X(i)); hl.setAttribute('x2', X(i)); hl.style.display = '';
-      var vals = [a.total, a.real, sonly.nav[i]];
-      for(var k=0;k<vals.length;k++){ marks[k].setAttribute('cx', X(i)); marks[k].setAttribute('cy', Y(vals[k])); marks[k].style.display = ''; }
+      var vals = sonly?[a.total, a.real, sonly.nav[i]]:[a.total,a.real];
+      for(var k=0;k<marks.length;k++){if(k<vals.length){marks[k].setAttribute('cx', X(i)); marks[k].setAttribute('cy', Y(vals[k])); marks[k].style.display = '';}else marks[k].style.display='none';}
       marks[0].setAttribute('fill', mc); /* chấm nổi theo màu nguồn chi của tháng đang hover */
       var soldBalance={},soldSpend={},soldReserve={},bought={};
       (a.strategy.trades||[]).forEach(function(t){
@@ -172,7 +174,7 @@ function drawMainChart(sim){
       var srcLab = srcByMi[i] + (mainKey&&mainKey!=='mmf'&&a.mmfSpentBySrc&&a.mmfSpentBySrc[mainKey]>0?' (qua Quỹ MMF)':'');
       var html = '<div class="th">'+chartMonthLabel(a)+' · '+a.age+' tuổi</div>'+
         trow(mc,'Tài sản (danh nghĩa)', fmtTr(a.total))+
-        trow('#92400e','Nếu gửi tiết kiệm 100%',fmtTr(sonly.nav[i])+(sonly.firstShort>=0&&NOW+i>=sonly.firstShort?' · đã thiếu chi':''))+
+        (sonly?trow('#92400e','Nếu gửi tiết kiệm 100%',fmtTr(sonly.nav[i])+(sonly.firstShort>=0&&NOW+i>=sonly.firstShort?' · đã thiếu chi':'')):trow('#dc2626','Dư nợ',fmtTr(a.debt)))+
         trow(mc,'Màu đường tháng này', srcLab)+
         (isBalancing ? tradeLines('Bán cân bằng',soldBalance)+tradeLines('Mua cân bằng',bought) : '')+
         (Object.keys(soldSpend).length ? tradeLines('Bán bù chi',soldSpend) : '')+
@@ -199,17 +201,19 @@ function drawMainChart(sim){
 function drawAllocChart(sim){
   var ms = sim.months || [];
   if(!ms.length){ $('allocChartBox').innerHTML = ''; return; }
+  var hasDebt=(state.debts||[]).length>0;
+  $('allocDebtLegend').hidden=!hasDebt;
   var W=1080, H=320, L=70, R=16, T=14, B=40;
   var n = ms.length;
   /* R09 — số dư ĐẦU KỲ từng nhóm (theo state, chỉ để hiển thị) làm điểm đầu các đường và nằm trong miền trục */
   var g0 = {
     mmf: state.assets.mmf || 0, tk: state.assets.tk || 0, tp: state.assets.tp || 0, cp: state.assets.cp || 0,
     gold: (state.goldChi || 0) * goldBid(state.goldPrice || 0),
-    land: state.landPlots.reduce(function(v, p){ return v + plotValue(p); }, 0)
+    land: state.landPlots.reduce(function(v, p){ return v + (plotOwnIdx(p)===0?plotValue(p):0); }, 0)
   };
-  var maxV = Math.max(1, sim.initial || 0);
+  var maxV = Math.max(1, sim.initial || 0, hasDebt?sim.initialDebt:0);
   Object.keys(g0).forEach(function(k){ maxV = Math.max(maxV, g0[k]); });
-  ms.forEach(function(r){ if(r.total > maxV) maxV = r.total; });
+  ms.forEach(function(r){ maxV=Math.max(maxV,r.total,hasDebt?r.debt:0); });
   function X(i){ return L + (i+1)/n*(W-L-R); } /* U03 — 1 bước bên trái cho điểm NAV ban đầu */
   function Y(v){ return T + (1-v/maxV)*(H-T-B); }
   var GROUPS = Object.keys(ASSET_COLORS).map(function(k){ return {k:k, lab:ASSET_COLORS[k].lab, c:ASSET_COLORS[k].c}; });
@@ -232,19 +236,27 @@ function drawAllocChart(sim){
   });
   var dt='M'+X(-1).toFixed(1)+','+Y(sim.initial).toFixed(1); ms.forEach(function(r, i){ dt += ' L'+X(i).toFixed(1)+','+Y(r.total).toFixed(1); });
   s += '<path d="'+dt+'" fill="none" stroke="#1e293b" stroke-width="2.5" stroke-dasharray="6 4"/>';
+  if(hasDebt){
+    var dd='M'+X(-1).toFixed(1)+','+Y(sim.initialDebt).toFixed(1);
+    ms.forEach(function(r,i){dd+=' L'+X(i).toFixed(1)+','+Y(r.debt).toFixed(1);});
+    s+='<path d="'+dd+'" fill="none" stroke="#dc2626" stroke-width="2.2" stroke-dasharray="4 3"/>';
+  }
   var spanY2 = Math.ceil(n/12), yStep2 = spanY2<=3 ? 12 : spanY2<=8 ? 24 : 60;
   for(var yr=0; yr<n; yr+=yStep2){ s += '<text x="'+X(yr)+'" y="'+(H-B+18)+'" text-anchor="middle" font-size="11" fill="#64748b">'+(Math.floor(NOW/12)+Math.floor(yr/12))+'</text>'; }
   s += '<text x="'+(W-R)+'" y="'+(H-6)+'" text-anchor="end" font-size="10" fill="#94a3b8">tháng →</text>';
   /* lớp bắt hover */
   s += '<line id="acHL" x1="0" y1="'+T+'" x2="0" y2="'+(H-B)+'" stroke="#334155" stroke-width="1" stroke-dasharray="3 3" style="display:none"/>';
   GROUPS.forEach(function(gr, gi){ s += '<circle id="acC'+gi+'" r="4" fill="'+gr.c+'" stroke="#fff" stroke-width="1.2" style="display:none"/>'; });
+  if(hasDebt)s+='<circle id="acCD" r="4.5" fill="#dc2626" stroke="#fff" stroke-width="1.2" style="display:none"/>';
   s += '<circle id="acCT" r="4.5" fill="#1e293b" stroke="#fff" stroke-width="1.5" style="display:none"/>';
   s += '<rect id="acOV" x="'+L+'" y="'+T+'" width="'+(W-L-R)+'" height="'+(H-T-B)+'" fill="transparent" style="cursor:crosshair"/>';
   s += '</svg><div class="tt" id="acTT"></div>';
   $('allocChartBox').innerHTML = s;
   (function(){
     var svg = $('allocChartBox').querySelector('svg'), tt = $('acTT'), hl = svg.querySelector('#acHL'), ov = svg.querySelector('#acOV');
-    var marks = GROUPS.map(function(_, gi){ return svg.querySelector('#acC'+gi); }); marks.push(svg.querySelector('#acCT'));
+    var marks = GROUPS.map(function(_, gi){ return svg.querySelector('#acC'+gi); });
+    if(hasDebt)marks.push(svg.querySelector('#acCD'));
+    marks.push(svg.querySelector('#acCT'));
     function hide(){ tt.style.display='none'; hl.style.display='none'; marks.forEach(function(m){ m.style.display='none'; }); }
     ov.addEventListener('pointermove', function(ev){
       var r = $('allocChartBox').querySelector('svg').getBoundingClientRect();
@@ -252,13 +264,16 @@ function drawAllocChart(sim){
       var i = Math.max(0, Math.min(n-1, Math.round((vx-L)/(W-L-R)*n)-1)); /* U03: trục đã dịch 1 bước */
       var a = ms[i];
       hl.setAttribute('x1', X(i)); hl.setAttribute('x2', X(i)); hl.style.display = '';
-      var vals = GROUPS.map(function(gr){ return a[gr.k]; }); vals.push(a.total);
+      var vals = GROUPS.map(function(gr){ return a[gr.k]; });
+      if(hasDebt)vals.push(a.debt);
+      vals.push(a.total);
       for(var k=0;k<vals.length;k++){ marks[k].setAttribute('cx', X(i)); marks[k].setAttribute('cy', Y(vals[k])); marks[k].style.display=''; }
       function row(c, lab, val){ return '<div class="tr"><span><i style="background:'+c+'"></i>'+lab+'</span><b>'+fmtTr(val)+'</b></div>'; }
       var html = '<div class="th">'+chartMonthLabel(a)+' · '+a.age+' tuổi</div>';
       GROUPS.forEach(function(gr){ html += row(gr.c, gr.lab, a[gr.k]); });
       html+=row('#64748b','TK: lãi tạm tính',a.tkAccrued)+row('#64748b','Tiền rút được (chưa BĐS)',a.liquid);
       html += row('#1e293b', '<b>Tổng</b>', a.total);
+      if(hasDebt)html+=row('#dc2626','Dư nợ (trừ)',a.debt)+row('#059669','Tài sản ròng',a.netWorth);
       tt.innerHTML = html; tt.style.display = 'block';
       var cr = $('allocChartBox').getBoundingClientRect();
       var px = X(i)*(r.width/W);
@@ -301,12 +316,16 @@ function monthActionHtml(m){
   var income=[['Lương/thu nhập',m.salary],['Lương hưu',m.pension],['Tiền thuê BĐS',m.rent]].filter(function(x){return x[1]>=1;})
     .map(function(x){return x[0]+' ('+fmtTr(x[1])+')';});
   if(m.eventIn>=1)income=income.concat(actionEvents(m,'thu').length?actionEvents(m,'thu'):['Thu sự kiện ('+fmtTr(m.eventIn)+')']);
+  if(m.loanDraw>=1)income.push('Giải ngân khoản vay ('+fmtTr(m.loanDraw)+')');
   if(property>=1&&!m.drawn.land)income.push('Bán BĐS theo lịch ('+fmtTr(property)+')');
   steps.push('<b>Thu:</b> '+(income.length?income.join(' + '):'Không'));
   var expenses=m.expense>=1?['Chi tiêu thường kỳ ('+fmtTr(m.expense)+')']:[];
-  var eventExpense=Math.max(0,m.eventOut-m.plotExp);
+  var eventExpense=Math.max(0,m.eventOut-m.plotExp-(m.propertyPurchase||0));
   if(eventExpense>=1)expenses=expenses.concat(actionEvents(m,'chi').length?actionEvents(m,'chi'):['Chi sự kiện ('+fmtTr(eventExpense)+')']);
   if(m.plotExp>=1)expenses.push('Chi BĐS ('+fmtTr(m.plotExp)+')');
+  if(m.propertyPurchase>=1)expenses.push('Mua BĐS ('+fmtTr(m.propertyPurchase)+')');
+  if(m.debtPaid>=1)expenses.push('Trả nợ ('+fmtTr(m.debtPaid)+', lãi phát sinh '+fmtTr(m.debtInterest)+')');
+  if(m.debtPayoff>=1)expenses.push('Tất toán từ tiền bán BĐS ('+fmtTr(m.debtPayoff)+')');
   var chi='<b>Chi:</b> '+(expenses.length?expenses.join(' + '):'Không');
   if(m.short>=1)chi+='; <b style="color:#b91c1c">chưa trả '+fmtTr(m.short)+'</b>';
   steps.push(chi);
@@ -350,7 +369,7 @@ function monthActionHtml(m){
     '<div><ol>'+steps.map(function(x){return '<li>'+x+'</li>';}).join('')+'</ol><div class="month-end">'+end+'</div></div></div>';
 }
 function yearActionSummary(ms){
-  var kinds={spend:[],reserve:[],balance:[],maturity:[],buy:[],property:[],short:[]};
+  var kinds={spend:[],reserve:[],balance:[],maturity:[],buy:[],property:[],loan:[],repay:[],purchase:[],short:[]};
   ms.forEach(function(m){
     var trades=(m.strategy.trades||[]).filter(function(t){return t.amount>=1;});
     var balance=trades.some(function(t){return t.reason==='Tái cân bằng theo lịch'||t.reason==='Áp dụng tỷ trọng của giai đoạn'||t.reason==='Cân bằng khi sổ tiết kiệm đáo hạn'||t.reason==='Sổ tiết kiệm đáo hạn — chờ kỳ cân bằng';})||
@@ -360,6 +379,9 @@ function yearActionSummary(ms){
     if(balance){if(m.strategy.maturityReview)kinds.maturity.push(m.month);else kinds.balance.push(m.month);}
     if(!balance&&trades.some(function(t){return t.side==='buy';}))kinds.buy.push(m.month);
     if(m.ledger.propertyProceeds>=1&&(m.drawn.land||0)<1)kinds.property.push(m.month);
+    if(m.loanDraw>=1)kinds.loan.push(m.month);
+    if(m.debtPaid+m.debtPayoff>=1)kinds.repay.push(m.month);
+    if(m.propertyPurchase>=1)kinds.purchase.push(m.month);
     if(m.short>=1)kinds.short.push(m.month);
   });
   function months(a){return 'T'+a.join(', T');}
@@ -370,6 +392,9 @@ function yearActionSummary(ms){
   if(kinds.spend.length)parts.push('Bán để chi '+months(kinds.spend));
   if(kinds.reserve.length)parts.push('Bán bổ sung MMF '+months(kinds.reserve));
   if(kinds.property.length)parts.push('Bán BĐS theo lịch '+months(kinds.property));
+  if(kinds.loan.length)parts.push('Giải ngân '+months(kinds.loan));
+  if(kinds.purchase.length)parts.push('Mua BĐS '+months(kinds.purchase));
+  if(kinds.repay.length)parts.push('Trả nợ '+(kinds.repay.length>=6?kinds.repay.length+' tháng':months(kinds.repay)));
   if(!parts.length)parts.push('Không có lệnh mua/bán tài sản');
   if(kinds.short.length)parts.push('Thiếu chi '+months(kinds.short));
   return parts.join(' · ');
@@ -408,7 +433,8 @@ function renderSimulationResults(vs){
     var w = '<div class="warnbar">⚠ <div><b>Dữ liệu còn '+blockErrs.length+' lỗi — mô phỏng tạm dừng cho đến khi sửa:</b><ul style="margin:4px 0 0 18px;">'+
       blockErrs.map(function(e){ return '<li>'+esc(e.msg)+'</li>'; }).join('')+'</ul></div></div>';
     $('simWarn').innerHTML = w;
-    ['rPension','rEndW','rReal','rLiq','rRunOut','rShort'].forEach(function(id){ $(id).textContent = '—'; $(id+'S').textContent = ''; });
+    ['rPension','rEndW','rReal','rLiq','rRunOut','rShort','rDebt','rNet'].forEach(function(id){ $(id).textContent = '—'; $(id+'S').textContent = ''; });
+    $('debtKpis').hidden=true;$('allocDebtLegend').hidden=true;
     $('chartBox').innerHTML = ''; $('srcLegend').innerHTML = '';
     $('allocChartBox').innerHTML = '';
     $('yearTable').innerHTML = '';
@@ -435,9 +461,11 @@ function renderSimulationResults(vs){
       $('rPension').textContent = '0 đ/tháng';
       $('rPensionS').textContent = state.extraPeople.length+1+' người trong gia đình — chưa ai có mức hưu > 0';
     } else {
-      /* M1 — tổng hưu cả nhà khi mọi người đều đã hưởng; liệt kê từng người kèm mốc của riêng họ */
-      var _tot=_all.reduce(function(x,st){return x+st.p0;},0);
+      /* M1 — tổng hưu cả nhà TẠI tháng mọi người đều đã nhận (mốc muộn nhất): người nhận sớm được
+         cộng đủ số năm tăng hưu của họ. Trước đây cộng các mức ban đầu ở mốc riêng từng người rồi
+         gán "đủ từ" mốc muộn nhất — số không khớp nghĩa của chính chú thích. */
       var _last=_all.reduce(function(a,b){return a.idx>=b.idx?a:b;}).idx;
+      var _tot=_all.reduce(function(x,st){var B=Math.max(NOW,st.idx);return x+st.p0*Math.pow(1+st.growth/100,Math.floor(Math.max(0,_last-B)/12));},0);
       $('rPension').textContent = fmtTr(_tot)+'/tháng';
       $('rPensionS').textContent = 'tổng cả nhà (đủ từ '+ymToStr(_last)+') · '+
         _all.map(function(st){return esc(st.name)+' '+fmtTr(st.p0)+' từ '+ymToStr(st.idx);}).join(' · ');
@@ -450,10 +478,15 @@ function renderSimulationResults(vs){
   var lastY = sim.years[sim.years.length-1];
   $('rEndW').textContent = fmtTr(lastY.end.total);
   $('rEndWS').textContent = 'gồm cả BĐS';
+  $('debtKpis').hidden=(state.debts||[]).length===0;
+  $('rDebt').textContent=fmtTr(lastY.end.debt);
+  $('rDebtS').textContent='dư nợ gốc và lãi chưa trả';
+  $('rNet').textContent=fmtTr(lastY.end.netWorth);
+  $('rNetS').textContent='tổng tài sản trừ dư nợ';
   $('rReal').textContent = fmtTr(lastY.real);
   $('rRealS').textContent = 'đã chiết khấu lạm phát '+vnNumStr(state.infl)+'%/năm';
   $('rLiq').textContent = fmtTr(lastY.end.liquid);
-  $('rLiqS').textContent = 'Sau rút sớm tiết kiệm, chưa gồm BĐS '+fmtTr(lastY.end.land);
+  $('rLiqS').textContent = 'Sau rút sớm tiết kiệm, đã trừ phí quỹ, chưa gồm BĐS '+fmtTr(lastY.end.land);
   function runOutAge(simX){ return simX.firstShort>=0 ? (ageAt(simX.firstShort)+' tuổi ('+ymToStr(simX.firstShort)+')') : 'không thiếu chi'; }
   $('rRunOut').textContent = runOutAge(sim);
   $('rRunOutS').textContent = 'tháng đầu tiên chi không đủ tiền rút';
@@ -467,18 +500,18 @@ function renderSimulationResults(vs){
     c.textContent = '✓ Kịch bản hiện tại không có tháng nào thiếu chi'+(lastY.end.total<=0?' dù NAV cuối kỳ về 0':'')+'. Kiểm tra rủi ro để xem kết quả khi lợi suất thay đổi.';
   } else {
     c.className = 'bigmsg warn';
-    c.textContent = '⚠ Kịch bản hiện tại thiếu chi từ '+runOutAge(sim)+' — tổng chưa trả '+fmtTr(sim.shortfall)+'. Kiểm tra mức chi, thời điểm thu và kế hoạch bán tài sản.';
+    c.textContent = '⚠ Kịch bản hiện tại thiếu chi từ '+runOutAge(sim)+' — tổng chưa trả '+fmtTr(sim.shortfall)+'. Kết quả tài sản và nợ sau mốc này chỉ là giả định tiếp diễn; hãy điều chỉnh kế hoạch.';
   }
   /* U03 — cột Chi là KẾ HOẠCH (chưa trừ thiếu); tài sản/sự kiện chi tiết xem ở hai biểu đồ và bảng tháng. */
-  var h = '<thead><tr><th>Năm</th><th>Tuổi</th><th>Thu nhập/T</th><th>Lương hưu/T</th><th title="Chi thường xuyên KẾ HOẠCH (giá tương lai) — chưa trừ phần thiếu">Chi KH/T</th><th>Thiếu</th><th>Thanh khoản</th><th>NAV</th><th>Thực</th><th>Việc trong năm</th></tr></thead><tbody>';
+  var h = '<thead><tr><th>Năm</th><th>Tuổi</th><th>Thu nhập/T</th><th>Lương hưu/T</th><th title="Chi thường xuyên KẾ HOẠCH (giá tương lai) — chưa trừ phần thiếu">Chi KH/T</th><th>Trả nợ/T</th><th>Thiếu</th><th>Thanh khoản</th><th>NAV</th><th>Dư nợ</th><th>Ròng</th><th>Thực</th><th>Việc trong năm</th></tr></thead><tbody>';
   sim.years.forEach(function(y){
     var yearMonths=sim.months.filter(function(m){return m.year===y.year;});
     h += '<tr class="'+(y.short>0?'bad':'')+'"><td><button type="button" class="year-toggle" data-year="'+y.year+'" aria-expanded="false" aria-controls="year-detail-'+y.year+'" aria-label="Mở kế hoạch năm '+y.year+'"><span class="year-caret" aria-hidden="true">▸</span>'+y.year+'</button></td><td>'+y.age+'</td>'+
-      '<td>'+fmtM1(y.inc/y.months)+'</td><td>'+fmtM1(y.pen/y.months)+'</td><td>'+fmtM1(y.exp/y.months)+'</td>'+
+      '<td>'+fmtM1(y.inc/y.months)+'</td><td>'+fmtM1(y.pen/y.months)+'</td><td>'+fmtM1(y.exp/y.months)+'</td><td>'+fmtM1(y.debtPaid/y.months)+'</td>'+
       '<td'+(y.short>0?' style="color:#dc2626;font-weight:700"':'')+'>'+(y.short>0?fmtM1(y.short):'')+'</td>'+
-      '<td>'+fmtM1(y.end.liquid)+'</td><td><b>'+fmtM1(y.end.total)+'</b></td><td>'+fmtM1(y.real)+'</td>'+
+      '<td>'+fmtM1(y.end.liquid)+'</td><td><b>'+fmtM1(y.end.total)+'</b></td><td>'+fmtM1(y.end.debt)+'</td><td><b>'+fmtM1(y.end.netWorth)+'</b></td><td>'+fmtM1(y.real)+'</td>'+
       '<td class="year-plan-cell">'+yearActionSummary(yearMonths)+'</td></tr>'+
-      '<tr class="year-plan-detail" id="year-detail-'+y.year+'" data-year="'+y.year+'" hidden><td colspan="10"></td></tr>';
+      '<tr class="year-plan-detail" id="year-detail-'+y.year+'" data-year="'+y.year+'" hidden><td colspan="13"></td></tr>';
   });
   $('yearTable').innerHTML = h + '</tbody>';
   yearActionSim=sim;
@@ -489,7 +522,8 @@ var lastRiskSignature='';
 function showSimulationError(msg){
   yearActionSim=null;
   $('simWarn').innerHTML='<div class="warnbar">'+esc(msg)+'</div>';
-  ['rPension','rEndW','rReal','rLiq','rRunOut','rShort'].forEach(function(id){$(id).textContent='—';$(id+'S').textContent='';});
+  ['rPension','rEndW','rReal','rLiq','rRunOut','rShort','rDebt','rNet'].forEach(function(id){$(id).textContent='—';$(id+'S').textContent='';});
+  $('debtKpis').hidden=true;$('allocDebtLegend').hidden=true;
   $('rShortCard').hidden=true;
   ['chartBox','allocChartBox','yearTable','srcLegend'].forEach(function(id){if($(id))$(id).innerHTML='';});
   $('concl').className='bigmsg warn';$('concl').textContent='Kết quả chưa hợp lệ — cần sửa dữ liệu.';$('riskBtn').disabled=true;$('riskOut').textContent='Chưa có kết quả rủi ro hợp lệ.';

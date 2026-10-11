@@ -47,8 +47,11 @@ test('pension: offsets living costs, increases NAV, and is included by default i
   near(withPension.months[8].mmf,6e6);
   near(withPension.months.at(-1).total,108.8e6-withPension.tpRedemptionFees);
   near(without.months.at(-1).total,76e6-without.tpRedemptionFees);
+  // Kịch bản rủi ro PHẲNG (CAGR/σ = 0) → mọi kịch bản trùng nhau. v14: liquid trừ phí quỹ còn trẻ,
+  // mà thời điểm mua TP đi theo đường lợi suất — đường ngẫu nhiên sẽ làm phân vị phân tán.
+  s.seriesMeta={gold:{cagr:0,sigma:0},cp:{cagr:0,sigma:0},land:{cagr:0,sigma:0}};
   const risk=c.riskCheck(3);
-  for(const q of ['p10','p50','p90'])near(risk[q],108.8e6-withPension.tpRedemptionFees);
+  for(const q of ['p10','p50','p90'])near(risk[q],withPension.months.at(-1).liquid);
   // Contributions are reference data. The already selected monthly pension remains the input to runSim.
   s.periods=[{from:'2026-01',to:'2027-12',type:'tn',bh:10e6,growth:0}];
   assert.ok(c.bhxhSummary().contribFuture>0);
@@ -215,6 +218,49 @@ test('v8 expenses: chi sửa chữa/duy tu phát sinh cuối tháng 12 năm ch�
   near(s.months[23].ledger.error,0,.005);
   c.state.landPlots=[plot({ownYear:2028,total:1e9,expenses:[{y:2027,amount:50e6}]})];   // chi trước năm sở hữu: validation chặn mô phỏng
   assert.ok(c.validateState().some(e=>e.level==='error'&&e.msg.indexOf('trước năm sở hữu')>=0));
+});
+/* Đợt 96 — chi duy tu dừng khi BĐS đã bán (kể cả bán khẩn cấp, gỡ khỏi dự báo); đường 100%
+   tiết kiệm không trả chi gắn BĐS; thanh khoản (liquid) là giá trị rút RÒNG sau phí quỹ. */
+test('v8 expenses: chi duy tu SAU tháng bán không còn phát sinh; chi trùng tháng bán vẫn tính',()=>{
+  let c=fresh(3);c.state.landPlots=[plot({total:1e9,saleYear:2026,expenses:[{y:2026,amount:1e8},{y:2027,amount:1e8}]})];
+  let m=c.runSim(false).months;
+  near(m[11].plotExp,1e8);          // 12/2026 trùng tháng bán: vẫn tính (quy ước cuối tháng)
+  near(m[23].plotExp,0);            // 12/2027 sau bán: không trừ nữa
+  near(m[23].total,9e8);            // 1 tỷ tiền bán − 100tr chi cùng tháng, lợi suất 0
+});
+test('v8 expenses: bán theo lịch gỡ chi duy tu tương lai khỏi dự báo (dự phòng MMF hết chuẩn bị tiền ma)',()=>{
+  let c=fresh(3);c.state.landPlots=[plot({total:1e9,saleYear:2026,expenses:[{y:2027,amount:1e8}]})];
+  let sim=c.runSim(false);
+  near(sim.months[11].strategy.futureBills,0);   // kỳ 12 tháng từ 2027-01 gồm chi 12/2027 — đã gỡ
+});
+test('v8 expenses: bán khẩn cấp cũng dừng chi duy tu và gỡ khỏi dự báo',()=>{
+  let c=fresh(3);c.state.landPlots=[plot({total:1e9,expenses:[{y:2027,amount:1e8}]})];
+  c.state.milestones=[{y:0,monthly:1e6}];           // chi vượt MMF ngay tháng đầu → bán khẩn cấp
+  let sim=c.runSim(false);
+  assert.ok(sim.months[0].ledger.propertyProceeds>0);
+  near(sim.months[11].strategy.futureBills,0);
+  near(sim.months[23].plotExp,0);
+  near(sim.months.at(-1).total,964e6);              // 1 tỷ − 36 tháng chi sống 1tr
+});
+test('savings-only: đường 100% tiết kiệm không trả chi duy tu BĐS',()=>{
+  let c=fresh(2);c.state.landPlots=[plot({total:1e9,expenses:[{y:2026,amount:1e8}]})];
+  let sim=c.runSim(false),alt=c.savingsOnlyNav(sim);
+  near(sim.months[11].plotExp,1e8);     // phương án chính vẫn trả (BĐS còn đó)
+  near(alt.nav.at(-1),1e9);             // đối chứng 100% tiết kiệm: đầu kỳ 1 tỷ, cuối kỳ nguyên 1 tỷ
+});
+test('liquid: thanh khoản trừ phí bán quỹ cổ phiếu, NAV giữ giá trị gộp',()=>{
+  let c=fresh(1),s=c.state;s.assets.cp=1e8;s.rates.cpSellFee=2;
+  let m=c.runSim(false).months[0];
+  near(m.liquid,98e6);
+  near(m.cp,1e8);
+  near(m.total,1e8);
+  near(m.ledger.error,0,.005);
+});
+test('liquid: TP còn trong kỳ miễn phí rút được quy về giá trị rút ròng',()=>{
+  let c=fresh(1),s=c.state;s.rates.tpEarlyFee=2;wage(c,10e6);invest(c,{tp:100});
+  let m=c.runSim(false).months[0];
+  near(m.tp,10e6);
+  near(m.liquid,9.8e6);
 });
 test('v8 early sale: chỉ BĐS đánh dấu Có thể bán bị bán — BĐS nhỏ hơn nhưng khóa vẫn giữ nguyên',()=>{
   let c=fresh(1);
@@ -976,7 +1022,7 @@ test('C18: nâng cấp bản v2 cũ — amount>0 đánh dấu cần xác nhận 
   saved.schemaVersion=2;
   saved.pensionSimple={amount:10e6,startYear:2046,startMonth:1,growth:8};
   let s=c.migrateState(saved);
-  assert.equal(s.schemaVersion,9);                     /* M1: v2 → thẳng v4 (bước qua v3 vẫn đánh dấu unknown); v6 = bỏ phân bổ cũ; v9 = Tab 8 compareCfg */
+  assert.equal(s.schemaVersion,12);                     /* M1: v2 → thẳng v4 (bước qua v3 vẫn đánh dấu unknown); v6 = bỏ phân bổ cũ; v9 = Tab 8 compareCfg */
   assert.equal(s.pensionSimple.amountBasis,'unknown');            // không suy đoán nghĩa (bàn giao mục 7.2)
   near(s.pensionSimple.amount,10e6,.001);                         // giữ nguyên số, không tự chia ngược lạm phát
   assert.equal(s.pensionSimple.amountSource,'manual');
@@ -1020,7 +1066,7 @@ test('R-F01: migrate bản v3 KHÔNG chạy lại nâng cấp v1 — giữ “C�
   assert.ok(s.landPlots.every(p=>p.sellable===false));     // v3 hợp lệ: lựa chọn "không bán sớm" chuyển sang từng BĐS
   assert.equal('landSellable' in s,false);                 // cấu hình chung đã xóa khỏi state
   assert.equal(s.sellRule,'cpFirst');
-  assert.equal(s.schemaVersion,9);                         /* M1 (11/09): v4 = gia đình; v6 = bỏ phân bổ cũ; v8 = BĐS giá hiện tại; v9 = Tab 8 compareCfg */
+  assert.equal(s.schemaVersion,12);                         /* M1 (11/09): v4 = gia đình; v6 = bỏ phân bổ cũ; v8 = BĐS giá hiện tại; v9 = Tab 8 compareCfg */
   const v1=JSON.parse(JSON.stringify(saved));delete v1.schemaVersion;delete v1.landSellable;   // bản v1 thật: chưa có cả hai trường
   const s2=c.migrateState(v1);
   assert.ok(s2.landPlots.every(p=>p.sellable===true));assert.equal(s2.sellRule,'nearPeak'); // v1 cũ vẫn được nâng mặc định
@@ -1121,7 +1167,7 @@ test('M1: migrate v4 — bản cũ thêm mảng rỗng; extraPeople hợp lệ g
   const v3=JSON.parse(JSON.stringify(c.state));
   v3.schemaVersion=3;
   let s=c.migrateState(v3);
-  assert.equal(s.schemaVersion,9);assert.strictEqual(JSON.stringify(s.extraPeople),'[]');assert.equal(s.activePerson,0);assert.equal(s.mainName,'');
+  assert.equal(s.schemaVersion,12);assert.strictEqual(JSON.stringify(s.extraPeople),'[]');assert.equal(s.activePerson,0);assert.equal(s.mainName,'');
   const v4=JSON.parse(JSON.stringify(c.state));
   v4.schemaVersion=4;
   v4.mainName='Anh';

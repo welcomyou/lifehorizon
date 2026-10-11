@@ -5,7 +5,7 @@
    sống trong ui/*.js và không thuộc phạm vi hồi quy Node. */
 const fs=require('node:fs'), vm=require('node:vm'), path=require('node:path');
 const root=path.resolve(__dirname,'..'), html=fs.readFileSync(path.join(root,'index.html'),'utf8');
-const files=['core/model.js','core/pension.js','core/compare.js','core/simulation.js','core/strategy.js','core/series.js','core/profiles.js','state/defaults.js','state/persist.js','ui/common.js'];
+const files=['core/model.js','core/pension.js','core/compare.js','core/debt.js','core/simulation.js','core/strategy.js','core/series.js','core/profiles.js','state/defaults.js','state/persist.js','ui/common.js'];
 function context(){
   const c=vm.createContext({console});
   for(const file of files)vm.runInContext(fs.readFileSync(path.join(root,file),'utf8'),c,{filename:file});

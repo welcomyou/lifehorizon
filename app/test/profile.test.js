@@ -110,3 +110,29 @@ test('profile: không truyền revision thì tự tăng từ base; cấu trúc c
   assert.equal(errs.length, 4);
   assert.ok(errs.every(e => typeof e === 'string'));
 });
+
+/* Đợt 89 — stateSig (ui/common.js): chữ ký dirty loại trường thuần-xem. Bấm chuyển tab con
+   người (activePerson) ở Tab 3 không được tính là "thay đổi chưa lưu"; đổi dữ liệu thật thì có. */
+test('profile: stateSig bỏ activePerson — đổi tab con người không phải thay đổi dữ liệu', () => {
+  const c = ctx();
+  const s = c.state;
+  s.activePerson = 0;
+  const base = c.stateSig(s);
+  s.activePerson = 1;
+  assert.equal(c.stateSig(s), base, 'đổi người đang mở không đổi chữ ký');
+  s.activePerson = 0;
+  assert.equal(c.stateSig(s), base);
+  assert.notEqual(JSON.stringify(s), base, 'state stringify đầy đủ vẫn khác — stateSig là bản bỏ trường xem');
+});
+
+test('profile: stateSig vẫn nhạy với dữ liệu thật và khớp giữa hai bản sao từ JSON', () => {
+  const c = ctx();
+  const s = c.state;
+  s.activePerson = 2;
+  const a = c.stateSig(s);
+  s.assets.mmf = 999e6;
+  assert.notEqual(c.stateSig(s), a, 'sửa tài sản phải đổi chữ ký');
+  // hai đối tượng tách dòng (file JSON.parse vs state đang chạy) cùng dữ liệu → cùng chữ ký
+  const roundTrip = JSON.parse(JSON.stringify(s));
+  assert.equal(c.stateSig(roundTrip), c.stateSig(s));
+});

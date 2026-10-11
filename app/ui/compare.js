@@ -93,7 +93,7 @@ function renderCompareTab(){
   var M0 = Math.max(NOW, schedule.length ? schedule[schedule.length-1].m + 1 : NOW);
   var retIdx = retireAgeMonths(personBirth(person), personGender(person));
   var maxYears = Math.max(0, Math.min(Math.floor((cap75Years(personGender(person))*12-months)/12), Math.floor((retIdx-M0+1)/12)));
-  var scheduleText = schedule.length ? 'Tab 3 ghi <b>' + cmpYears(months) + '</b> đóng BHXH (đã qua ' + cmpYears(monthsPast) + ' tính đến ' + ymToStr(NOW) + '), kết thúc ' + ymToStr(schedule[schedule.length-1].m) + '.' : 'Tab 3 chưa có lịch đóng BHXH.';
+  var scheduleText = schedule.length ? 'Tab 4 ghi <b>' + cmpYears(months) + '</b> đóng BHXH (đã qua ' + cmpYears(monthsPast) + ' tính đến ' + ymToStr(NOW) + '), kết thúc ' + ymToStr(schedule[schedule.length-1].m) + '.' : 'Tab 4 chưa có lịch đóng BHXH.';
   var savingsText = schedule.length ? 'Tiết kiệm được giả định gửi thay tiền BHXH từ <b>' + ymToStr(schedule[0].m) + '</b>.' : 'Tiết kiệm được giả định gửi thay các khoản đóng trong số năm được chọn.';
   var eligibilityText = months < 180 ? 'Lịch này còn thiếu <b>' + cmpYears(180-months) + '</b> để có lương hưu.' : (monthsPast < 180 ? 'Đủ 15 năm theo lịch, chưa phải đã đóng đủ hôm nay.' : '');
   var extraText = maxYears ? 'Thử đóng thêm <b>0–' + maxYears + ' năm</b> từ <b>' + ymToStr(M0) + '</b>.' : 'Không còn năm tròn để đóng thêm trước tuổi nghỉ hưu.';

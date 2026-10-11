@@ -1,7 +1,9 @@
 'use strict';
 /* [ui/investment.js] Tab 6 — trình kéo lợi suất theo năm cho 3 chuỗi (vàng/CP/BĐS): kéo chấm giữ hình
    dạng log 12 tháng của năm đó, đổi CAGR/σ tạo lại chuỗi (core/series.js), Sinh chuỗi đổi seed.
-   GHI state.series[key] (kéo chấm sửa trực tiếp chuỗi tháng) + state.seriesMeta[key].cagr sau khi thả. */
+   GHI state.series[key] (kéo chấm sửa trực tiếp chuỗi tháng) + state.seriesMeta[key].cagr sau khi thả.
+   Biểu đồ lãi vay thứ tư là đường bậc thang từ debtFloatingRates; có bộ sinh
+   kịch bản lãi riêng theo năm, không dùng mô hình lợi suất tài sản. */
 /* ---- Trình kéo lợi suất: hiển thị điểm THEO NĂM cho gọn; chuỗi chi tiết THEO THÁNG (ẩn) dùng tính NAV từng tháng ---- */
 function renderSeriesChart(boxId, key, title, color){
   /* R08 — kỳ mô phỏng sai: không dựng biểu đồ theo dữ liệu kỳ đó, hiện gợi ý sửa */
@@ -166,4 +168,100 @@ function renderSeriesChart(boxId, key, title, color){
   }
   svg.addEventListener('pointerup', endDrag);
   svg.addEventListener('pointercancel', endDrag);
+}
+
+/* Kịch bản lãi vay: đường bậc thang theo năm, dùng chung cho mọi khoản thả nổi.
+   Kéo tại một năm tạo/đổi mốc của chính năm đó; mức giữ tới mốc tiếp theo. */
+function renderDebtRateChart(){
+  var box=$('scDebtRate');
+  if(!Number.isInteger(state.simYears)||state.simYears<1||state.simYears>100){
+    box.innerHTML='<div class="hint">Sửa số năm mô phỏng ở Tab 1 để chỉnh lãi vay.</div>';box.__html=null;return;
+  }
+  var n=state.simYears,W=1080,H=210,L=48,R=22,T=18,B=29;
+  var rates=Array.from({length:n},function(_,y){var v=debtFloatingRateAt(y*12);return finiteNumber(v)?v:8;});
+  var top=Math.max(20,Math.ceil((Math.max.apply(null,rates)+4)/5)*5);
+  function X(y){return L+y/Math.max(1,n-1)*(W-L-R);}
+  function Y(v){return T+(1-v/top)*(H-T-B);}
+  function stepPath(){
+    var d='M'+X(0).toFixed(1)+','+Y(rates[0]).toFixed(1);
+    for(var j=1;j<n;j++)d+=' H'+X(j).toFixed(1)+' V'+Y(rates[j]).toFixed(1);
+    return d+' H'+(W-R);
+  }
+  var cfg=state.debtRateGenerator||{center:rates[0],swing:2};
+  var s='<div class="top"><b>Lãi vay thả nổi (%/năm)</b><span class="badge live" id="debtRateLive">Kéo điểm năm để chỉnh</span>'+
+    '<label title="Mức lãi trung tâm để sinh kịch bản; không tự đổi đường đang có">Mức trung tâm %<input type="text" inputmode="decimal" class="num" data-debt-gen="center" value="'+vnNumStr(cfg.center)+'"></label>'+
+    '<label title="Mức lãi mỗi năm dao động tối đa quanh mức trung tâm, tính bằng điểm phần trăm">Dao động ± điểm %<input type="text" inputmode="decimal" class="num" data-debt-gen="swing" value="'+vnNumStr(cfg.swing)+'"></label>'+
+    '<button type="button" class="btn mini ghost" data-debt-generate title="Sinh mức lãi thả nổi mới cho từng năm mô phỏng">⟳ Sinh chuỗi</button></div>'+
+    '<div class="svgbox"><svg viewBox="0 0 '+W+' '+H+'" aria-label="Kịch bản lãi vay thả nổi theo năm">';
+  for(var g=0;g<=4;g++){
+    var val=top*g/4,y=Y(val);
+    s+='<line x1="'+L+'" y1="'+y+'" x2="'+(W-R)+'" y2="'+y+'" stroke="#e8edf3"/>'+
+      '<text x="'+(L-6)+'" y="'+(y+4)+'" text-anchor="end" font-size="10" fill="#64748b">'+vnNumStr(val)+'%</text>';
+  }
+  var labelStep=n<=8?1:n<=20?2:5;
+  for(var yr=0;yr<n;yr+=labelStep)s+='<text x="'+X(yr)+'" y="'+(H-7)+'" text-anchor="middle" font-size="10" fill="#64748b">năm '+yr+'</text>';
+  s+='<path id="debtRatePath" d="'+stepPath()+'" fill="none" stroke="#dc2626" stroke-width="2.5"/>';
+  for(var i=0;i<n;i++)s+='<circle class="pt" data-y="'+i+'" cx="'+X(i).toFixed(1)+'" cy="'+Y(rates[i]).toFixed(1)+'" r="4.5" fill="'+((state.debtFloatingRates||[]).some(function(row){return row.fromY===i;})?'#dc2626':'#fca5a5')+'" stroke="#fff" stroke-width="1.3"/>';
+  s+='</svg><div class="tt"></div></div>';
+  if(box.__html===s)return;
+  box.__html=s;box.innerHTML=s;
+  box.querySelectorAll('[data-debt-gen]').forEach(function(inp){
+    inp.addEventListener('change',function(){
+      var v=numParseVN(inp.value);
+      if(!finiteNumber(v)||v<0||v>100){showSimulationError('Mức trung tâm và dao động lãi vay phải từ 0 đến 100%.');inp.value=vnNumStr(cfg[inp.dataset.debtGen]);return;}
+      state.debtRateGenerator[inp.dataset.debtGen]=v;scheduleRefresh();
+    });
+  });
+  box.querySelector('[data-debt-generate]').onclick=function(){
+    var centerInput=box.querySelector('[data-debt-gen="center"]'),swingInput=box.querySelector('[data-debt-gen="swing"]');
+    var center=numParseVN(centerInput.value),swing=numParseVN(swingInput.value);
+    if(!finiteNumber(center)||center<0||center>100||!finiteNumber(swing)||swing<0||swing>100){showSimulationError('Mức trung tâm và dao động lãi vay phải từ 0 đến 100%.');return;}
+    state.debtRateGenerator={center:center,swing:swing};
+    state.debtFloatingRates=generateDebtFloatingRates(n,center,swing,Math.floor(Math.random()*0x100000000));
+    refresh();
+  };
+  var svg=box.querySelector('svg'),host=box.querySelector('.svgbox'),tip=box.querySelector('.tt'),drag=-1,changed=false,hover=-1;
+  function point(ev){var r=svg.getBoundingClientRect();return {x:(ev.clientX-r.left)*W/r.width,y:(ev.clientY-r.top)*H/r.height};}
+  function nearest(x){return Math.max(0,Math.min(n-1,Math.round((x-L)/(W-L-R)*(n-1))));}
+  function showTip(yr,ev){
+    tip.innerHTML='<div class="th">Năm '+yr+' · từ '+ymToStr(NOW+yr*12)+'</div><div class="tr"><span>Lãi vay thả nổi</span><b>'+vnNumStr(rates[yr])+'%/năm</b></div>';
+    var r=svg.getBoundingClientRect(),cr=host.getBoundingClientRect(),px=X(yr)*r.width/W+r.left-cr.left;
+    tip.style.display='block';tip.style.left=Math.max(4,Math.min(px+12,cr.width-tip.offsetWidth-4))+'px';
+    tip.style.top=Math.max(4,Math.min(ev.clientY-cr.top-20,cr.height-tip.offsetHeight-4))+'px';
+  }
+  svg.addEventListener('pointerdown',function(ev){
+    drag=nearest(point(ev).x);changed=false;tip.style.display='none';
+    if(svg.setPointerCapture)try{svg.setPointerCapture(ev.pointerId);}catch(e){}
+    ev.preventDefault();
+  });
+  svg.addEventListener('pointermove',function(ev){
+    var p=point(ev);
+    if(drag<0){
+      var y=nearest(p.x);
+      if(hover>=0&&hover!==y){var old=svg.querySelector('circle[data-y="'+hover+'"]');if(old)old.setAttribute('r','4.5');}
+      var c=svg.querySelector('circle[data-y="'+y+'"]');if(c)c.setAttribute('r','6');hover=y;showTip(y,ev);return;
+    }
+    var v=Math.round(Math.max(0,Math.min(100,(1-(p.y-T)/(H-T-B))*top))*10)/10;
+    var row=state.debtFloatingRates.find(function(r){return r.fromY===drag;});
+    if(!row){row={fromY:drag,rate:v};state.debtFloatingRates.push(row);}
+    row.rate=v;changed=true;
+    for(var i=drag;i<n;i++){
+      var next=debtFloatingRateAt(i*12);rates[i]=finiteNumber(next)?next:8;
+      var c2=svg.querySelector('circle[data-y="'+i+'"]');if(c2){c2.setAttribute('cy',Y(rates[i]).toFixed(1));if(i===drag)c2.setAttribute('fill','#dc2626');}
+    }
+    svg.querySelector('#debtRatePath').setAttribute('d',stepPath());
+    $('debtRateLive').textContent='năm '+drag+': '+vnNumStr(v)+'%/năm';showTip(drag,ev);
+  });
+  svg.addEventListener('pointerleave',function(){tip.style.display='none';if(hover>=0){var c=svg.querySelector('circle[data-y="'+hover+'"]');if(c)c.setAttribute('r','4.5');}hover=-1;});
+  function end(ev){
+    if(drag<0)return;
+    var selected=drag;drag=-1;try{if(svg.hasPointerCapture&&svg.hasPointerCapture(ev.pointerId))svg.releasePointerCapture(ev.pointerId);}catch(e){}
+    $('debtRateLive').textContent='Kéo điểm năm để chỉnh';
+    if(changed&&selected>0){
+      var row=state.debtFloatingRates.find(function(r){return r.fromY===selected;});
+      if(row&&row.rate===debtFloatingRateAt((selected-1)*12))state.debtFloatingRates.splice(state.debtFloatingRates.indexOf(row),1);
+    }
+    if(changed)setTimeout(function(){refresh();},0);
+  }
+  svg.addEventListener('pointerup',end);svg.addEventListener('pointercancel',end);
 }

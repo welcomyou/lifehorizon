@@ -9,7 +9,7 @@
 # ---- DỮ LIỆU CÁ NHÂN: hồ sơ người dùng thật (JSON tài chính cá nhân) ----
 profiles/
 
-# ---- audit/: chỉ giữ đúng file golden hiện hành cho `npm run golden` ----
+# ---- audit/: chỉ giữ golden từ fixture giả lập, không giữ dữ liệu hồ sơ thật ----
 # (golden-v11 là số mô phỏng sinh từ fixture giả lập, không phải dữ liệu thật;
 #  mọi thứ khác trong audit/ — bản sao hồ sơ nghiệm thu, ảnh chụp màn hình số
 #  tiền thật, báo cáo phân tích — đều KHÔNG đưa lên repo)
@@ -17,6 +17,12 @@ audit/*
 !audit/2026-10-03-cost-aware-rebalance/
 audit/2026-10-03-cost-aware-rebalance/*
 !audit/2026-10-03-cost-aware-rebalance/golden-v11.json
+!audit/2026-10-04-debt/
+audit/2026-10-04-debt/*
+!audit/2026-10-04-debt/golden-baseline.json
+!audit/2026-10-11-logic-fix/
+audit/2026-10-11-logic-fix/*
+!audit/2026-10-11-logic-fix/golden-baseline.json
 
 # ---- Sao lưu dự án cũ (chứa snapshot hồ sơ + docs thời điểm) ----
 backups/

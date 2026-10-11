@@ -138,6 +138,19 @@ function moneyVal(el){
 function pct(x){ return (x*100).toFixed(1).replace('.',',')+'%'; }
 function ageAt(idx){ return Math.floor(idx/12) - state.birthYear; }
 
+/* Đợt 89 — chữ ký trạng thái cho "có thay đổi chưa lưu" (app.js đặt sau mỗi refresh; profiles.js so
+   với baseline file, so bản nháp, băm mốc rủi ro): LOẠI TRƯỜNG THUẦN XEM — activePerson (đang mở
+   tab con của người nào ở Tab 3) — vì đổi lựa chọn xem không đụng dữ liệu dòng tiền, không đáng bị
+   báo "thay đổi chưa lưu". Giá trị vẫn nằm trong state và vẫn lưu vào file (mở hồ sơ trả về đúng
+   tab con đã mở), chỉ không tham gia so khớp dirty/rủi ro/nháp. Thêm trường thuần xem mới sau này
+   thì loại ở đây luôn. */
+function stateSig(s){
+  if(!s || typeof s !== 'object') return JSON.stringify(s);
+  var c = {};
+  for(var k in s){ if(k === 'activePerson') continue; c[k] = s[k]; }
+  return JSON.stringify(c);
+}
+
 /* ---- DOM & danh sách dùng chung (bổ sung B4 — chuyển từ inline script) ---- */
 function $(id){ return document.getElementById(id); }
 /* ================= Dialog thông báo của app — KHÔNG dùng alert/confirm mặc định trình duyệt =================

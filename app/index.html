@@ -27,6 +27,8 @@
   .card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:14px;}
   .card h3{font-size:13px; margin-bottom:10px; color:var(--blue); text-transform:uppercase; letter-spacing:.4px;}
   label{display:block; font-size:11.5px; color:var(--muted); margin:7px 0 2px; font-weight:600;}
+  .apct{font-weight:400;}
+  #lbMMF,#lbTK,#lbTP,#lbCP,#lbGold{font-weight:700;}
   input, select, textarea{width:100%; padding:6px 8px; border:1px solid var(--line); border-radius:8px; font-size:13px; background:#fff;}
   textarea{font-family:inherit; resize:vertical;}
   input:focus, select:focus{outline:2px solid var(--blue2); border-color:var(--blue);}
@@ -274,6 +276,10 @@
   }
   /* ===== BĐS v8 — mỗi BĐS một khung viền màu riêng để phân biệt nhanh ===== */
   .property-card{border:2px solid var(--line);border-left-width:6px;border-radius:10px;padding:10px 12px;margin:10px 0;}
+  .debt-card{border:1px solid var(--line);border-radius:10px;padding:12px;margin:10px 0;background:#f8fafc;}
+  .debt-top{display:flex;align-items:end;gap:8px;margin-bottom:8px}.debt-top label{flex:1;min-width:0}
+  .debt-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;align-items:end}
+  .debt-grid label{min-width:0}.debt-card .hint{margin-top:8px}
   .property-card .lrow{border:0;padding:0;background:transparent;}
   .prow1{display:grid;grid-template-columns:minmax(160px,1fr) auto 28px;gap:8px;align-items:end;margin-bottom:6px;}
   .pc0{border-color:#2563eb;background:#eff6ff;} .pc1{border-color:#059669;background:#ecfdf5;}
@@ -287,6 +293,7 @@
   .pexprow.head{font-size:10.5px;color:var(--muted);font-weight:700;text-transform:uppercase;margin-bottom:2px;}
   .pexp-mobile-label{display:none;}
   @media(max-width:760px){
+    .debt-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
     .property-card .row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 8px;align-items:end;}
     .property-card .row>*{min-width:0;}
     .property-values>div:last-child,.property-rent>div:last-child,.property-rent>.pchk{grid-column:1/-1;}
@@ -301,7 +308,13 @@
   /* ===== Đợt 10 — header gọn một hàng: tiêu đề TRÁI, hồ sơ (profile) PHẢI tận khoảng trống;
      nút kiểu .hbtn nổi trên nền xanh đậm, trạng thái chữ sáng đọc được trên xanh ===== */
   header{background:linear-gradient(135deg,#1e3a8a,#2563eb); color:#fff; padding:12px 28px; display:flex; align-items:center; justify-content:space-between; gap:10px 20px; flex-wrap:wrap;}
+  header .htxt{display:flex; align-items:center; gap:10px;}
   header .htxt h1{font-size:19px;} header .htxt p{font-size:12px; opacity:.85; margin-top:2px;}
+  /* Hai dòng tiêu đề căn giữa theo nhau (yêu cầu 04/10) + nút ⓘ giới thiệu nhỏ bên cạnh */
+  header .htxt-lines{text-align:center;}
+  .about-btn{flex:0 0 auto; width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,.5); background:rgba(255,255,255,.13); color:#fff; font-size:13px; font-weight:700; font-style:italic; font-family:Georgia,'Times New Roman',serif; line-height:1; padding:0; cursor:pointer; display:inline-flex; align-items:center; justify-content:center;}
+  .about-btn:hover{background:rgba(255,255,255,.28);}
+  .modal .mbody a{color:var(--blue); font-weight:600; word-break:break-all;}
   #profileBar{display:flex; gap:6px; align-items:center; flex-wrap:wrap; justify-content:flex-end; flex:1 1 480px; max-width:900px;}
   #profileBar .ptitle{font-size:11px;font-weight:700;color:rgba(255,255,255,.85);letter-spacing:.6px;text-transform:uppercase;white-space:nowrap;}
   #profileSelect{width:auto;max-width:230px;min-width:150px;padding:5px 8px;font-size:12.5px;border:none;border-radius:8px;}
@@ -454,8 +467,11 @@
 
 <header>
   <div class="htxt">
-    <h1>LifeHorizon - Dòng tiền cuộc đời</h1>
-    <p>Phiên bản 1.1 · Mô phỏng dòng tiền theo tháng</p>
+    <div class="htxt-lines">
+      <h1>LifeHorizon - Dòng tiền cuộc đời</h1>
+      <p>Phiên bản 1.1 · Mô phỏng dòng tiền theo tháng</p>
+    </div>
+    <button type="button" id="aboutBtn" class="about-btn" aria-label="Giới thiệu về LifeHorizon" title="Giới thiệu về phần mềm">i</button>
   </div>
   <!-- ===== Hồ sơ (profile) — mỗi hồ sơ là một file JSON trong thư mục profiles (app/server.js);
        đợt 10: dời từ hàng riêng lên tận khoảng trống bên phải của header ===== -->
@@ -472,9 +488,9 @@
 
 <nav>
   <button class="active" data-tab="t1">1 · Thông tin</button>
-  <button data-tab="t2">2 · Tài sản</button>
-  <button data-tab="t3">3 · BHXH</button>
-  <button data-tab="t4">4 · Chi phí</button>
+  <button data-tab="t2">2 · Tài sản &amp; nợ</button>
+  <button data-tab="t4">3 · Chi phí</button>
+  <button data-tab="t3">4 · BHXH</button>
   <button data-tab="t5">5 · Thu nhập &amp; phân bổ</button>
   <button data-tab="t6">6 · Lợi suất đầu tư</button>
   <button data-tab="t7">7 · Mô phỏng</button>
@@ -494,7 +510,7 @@
     <div>
       <div class="card">
         <h3>Hồ sơ người trụ cột</h3>
-        <label for="mainName">Tên hiển thị (dùng ở Tab 3 · BHXH &amp; Tab 7 · Mô phỏng)</label>
+        <label for="mainName">Tên hiển thị (dùng ở Tab 4 · BHXH &amp; Tab 7 · Mô phỏng)</label>
         <input id="mainName" placeholder="ví dụ: Anh" maxlength="40">
         <div class="row">
           <div><label>Năm sinh</label><input type="text" inputmode="numeric" class="num" id="birthYear" value="1990"></div>
@@ -503,7 +519,6 @@
         <label>Tháng bắt đầu (mm/yyyy)</label><input id="startMonth" type="text" inputmode="numeric" aria-label="Tháng bắt đầu" placeholder="09/2026">
         <label>Số năm mô phỏng</label>
         <input type="text" inputmode="numeric" class="num" id="simYears" value="40">
-        <div class="hint">Khung thời gian mô phỏng. Tài sản ở Tab 2 · chi tiêu ở Tab 4 · BHXH ở Tab 3 · thu nhập &amp; phân bổ ở Tab 5 · lợi suất ở Tab 6.</div>
       </div>
     </div>
     <div>
@@ -527,11 +542,11 @@
   </div>
 </section>
 
-<!-- ============ TAB 2 — TÀI SẢN ============ -->
+<!-- ============ TAB 2 — TÀI SẢN & NỢ ============ -->
 <section id="t2" class="tab">
   <div class="tabMsg"></div>
   <div class="card">
-    <h3 id="aTitle">Tiền, quỹ và vàng ban đầu</h3>
+    <h3 id="aTitle">Tài sản thanh khoản cao</h3>
     <p class="hint">Nhập số đang có. Phân bổ ban đầu đặt ở Tab 5.</p>
     <div class="row"><div><label id="lbMMF">Quỹ MMF</label><input type="text" inputmode="numeric" class="money" id="aMMF" value="150.000.000"></div>
     <div><label id="lbTK">Tiết kiệm</label><input type="text" inputmode="numeric" class="money" id="aTK" value="50.000.000"></div></div>
@@ -543,15 +558,22 @@
   </div>
   <div class="card">
     <h3 id="lbLandH">Bất động sản</h3>
-    <p class="hint">Nhập tiền theo giá hôm nay. Để trống “Năm sở hữu” nếu đã có, “Thuê từ năm” nếu cho thuê ngay, “Năm bán” nếu chưa hẹn bán. “Có thể bán” cho phép bán sớm khi tài sản thanh khoản cạn.</p>
+    <p class="hint">Nhập giá trị theo giá thị trường hiện tại. Nhập “Năm sở hữu” nếu sẽ nhận hoặc mua BĐS trong tương lai; BĐS đang có thì để trống. Muốn mô phỏng mua bằng vay, gắn BĐS với khoản vay mới ở dưới. Nếu dự tính bán thì nhập “Năm bán”; “Có thể bán” cho phép bán sớm khi cạn tiền. Chọn “Cho thuê” nếu có tiền thuê.</p>
     <div id="plotList"></div>
     <button class="btn mini ghost" id="addPlot">＋ Thêm bất động sản</button>
     <div class="hint" id="assetTotal">Tổng tài sản hiện tại: —</div>
     <select id="sellRule" hidden aria-hidden="true"><option value="nearPeak">Tài sản ít giảm so với đỉnh</option><option value="cpFirst">Cổ phiếu trước</option></select>
   </div>
+  <div class="card">
+    <h3>Nợ và khoản vay</h3>
+    <p class="hint">Nhập dư nợ hôm nay hoặc khoản sẽ vay. Lãi suất tương lai là giả định của bạn; khoản vay đã nhập ở đây không nhập lại trong Chi phí cố định ở Tab 3.</p>
+    <div id="debtList"></div>
+    <button class="btn mini ghost" id="addDebt">＋ Thêm khoản vay</button>
+    <div class="hint" id="debtTotal"></div>
+  </div>
 </section>
 
-<!-- ============ TAB 3 — BHXH ============ -->
+<!-- ============ TAB 4 (section id t3, đổi chỗ với Chi phí đợt 94) — BHXH ============ -->
 <section id="t3" class="tab">
   <div class="tabMsg"></div>
   <!-- Đ3 — tổng hợp gia đình lên TRÊN CÙNG, trải toàn bề ngang: một dòng mỗi người + dòng tổng,
@@ -583,7 +605,7 @@
           <span class="badge" id="psSourceChip">○ trống</span>
         </div>
         <div><input type="text" inputmode="numeric" class="money" id="psAmount" value="0"></div>
-        <div class="hint" style="margin-top:5px; font-size:12px; color:var(--ink);">Tự tính cần ít nhất 180 tháng đóng. Mức hưu được quy đổi theo lạm phát (Tab 4) đến tháng nhận.</div>
+        <div class="hint" style="margin-top:5px; font-size:12px; color:var(--ink);">Tự tính cần ít nhất 180 tháng đóng. Mức hưu được quy đổi theo lạm phát (Tab 3) đến tháng nhận.</div>
         <div class="row">
           <div><label for="psStart">Bắt đầu (năm)</label><input type="text" inputmode="numeric" class="num" id="psStart" value="2052"></div>
           <div><label for="psMonth">Bắt đầu (tháng)</label><input type="text" inputmode="numeric" class="num" id="psMonth" value="1"></div>
@@ -618,7 +640,7 @@
   </div>
 </section>
 
-<!-- ============ TAB 4 — CHI PHÍ ============ -->
+<!-- ============ TAB 3 (section id t4, đổi chỗ với BHXH đợt 94) — CHI PHÍ ============ -->
 <section id="t4" class="tab">
   <div class="tabMsg"></div>
   <div class="card">
@@ -637,10 +659,15 @@
     </div>
     <div class="card">
       <h3>Chi phí cố định</h3>
-      <div class="hint">Nhập tổng số tiền thực trả mỗi tháng, không tăng theo lạm phát. Mốc mới thay mốc cũ: hết trả góp 20 triệu nhưng còn bảo hiểm 3 triệu thì nhập 3 triệu; hết tất cả thì nhập 0 từ năm thứ sau năm trả cuối.</div>
+      <div class="hint">Nhập tổng các khoản cố định khác, như phí bảo hiểm, theo số tiền thực trả mỗi tháng. Khoản vay ở Tab 2 đã được tính riêng, không nhập lại. Mốc mới thay mốc cũ; hết khoản thì nhập 0 từ năm thứ sau năm trả cuối.</div>
       <div class="milestone-scroll"><div id="fmsList"></div></div>
       <button class="btn mini ghost" id="addFixedMs">＋ Khoản cố định</button>
     </div>
+  </div>
+  <div class="card" id="debtScheduleCard" hidden>
+    <h3>Lịch trả nợ dự kiến</h3>
+    <div class="hint">Tự lấy từ Tab 2. Mức trả có thể đổi sau kỳ lãi ban đầu hoặc khi bán BĐS gắn vay.</div>
+    <div id="debtSchedule"></div>
   </div>
   <div class="card event-card">
     <h3>Sự kiện chi lớn</h3>
@@ -655,14 +682,14 @@
   <div class="tabMsg"></div>
   <div class="card">
     <h3>Thu nhập hằng tháng (chưa gồm lương hưu)</h3>
-    <div class="hint" style="margin:-4px 0 10px;">Nhập theo giá hiện tại. “Tăng %/năm” là mức tăng của số tiền nhận từ tháng bắt đầu mô phỏng; 0% giữ nguyên số tiền, mốc mới mặc định bằng lạm phát ở Tab 4. Cột “Tương lai” tự tính. Khi ngừng thu nhập, thêm mốc 0 đ; lương hưu từ Tab 3 được cộng riêng.</div>
+    <div class="hint" style="margin:-4px 0 10px;">Nhập theo giá hiện tại. “Tăng %/năm” là mức tăng của số tiền nhận từ tháng bắt đầu mô phỏng; 0% giữ nguyên số tiền, mốc mới mặc định bằng lạm phát ở Tab 3. Cột “Tương lai” tự tính. Khi ngừng thu nhập, thêm mốc 0 đ; lương hưu từ Tab 4 được cộng riêng.</div>
     <div class="milestone-scroll" id="investmentList"></div>
     <button class="btn mini ghost" id="addInc">＋ Thêm mốc thu nhập</button>
   </div>
   <div class="card">
     <div class="cardheadrow"><h3>Mốc phân bổ tài sản</h3><button type="button" class="btn mini ghost" id="syncAllocIncome" title="Thêm mốc phân bổ trùng mốc thu nhập, xóa mốc phân bổ không trùng; giữ mốc năm 0. Mốc mới lấy tỷ lệ từ mốc trước.">⟳ Đồng bộ theo thu nhập</button></div>
     <div class="allocation-settings"><div><label for="lifeReview">Xem xét cân bằng mỗi</label><select id="lifeReview"><option value="1">1 tháng</option><option value="3">3 tháng</option><option value="6">6 tháng</option><option value="12">1 năm</option></select></div><div class="hint balance-explain">Đến kỳ, phần mềm xem nhóm tài sản nào lệch tỷ lệ mục tiêu để bán bớt hoặc mua thêm; chỉ giao dịch khi cần, sau khi giữ tiền dự phòng.</div></div>
-    <p class="hint">MMF dự phòng = số tháng dự phòng × tổng chi hằng tháng ở Tab 4 (chưa trừ thu nhập). Tỷ lệ tiết kiệm, quỹ và vàng áp dụng cho phần ngoài MMF. Mốc năm 0 phân bổ tài sản ở Tab 2; mốc sau thay mốc trước. “Đồng bộ theo thu nhập” thêm mốc thiếu và xóa mốc phân bổ không trùng mốc thu nhập.</p>
+    <p class="hint">MMF dự phòng = số tháng dự phòng × (chi hằng tháng ở Tab 3 + tiền trả nợ ở Tab 2), chưa trừ thu nhập. Tỷ lệ tiết kiệm, quỹ và vàng áp dụng cho phần ngoài MMF. Mốc năm 0 phân bổ tài sản ở Tab 2; mốc sau thay mốc trước. “Đồng bộ theo thu nhập” thêm mốc thiếu và xóa mốc phân bổ không trùng mốc thu nhập.</p>
     <div class="milestone-scroll" id="allocationList"></div>
     <button class="btn mini ghost" id="addAllocation">＋ Thêm mốc phân bổ</button>
   </div>
@@ -720,11 +747,12 @@
     <div class="hint">Lãi suất hiện tại và các kỳ tái tục là giả định anh nhập; không tự cập nhật theo ngân hàng.</div>
   </div>
   <div class="card">
-    <h3>Kịch bản lợi suất — đổi CAGR/σ hoặc kéo chấm năm</h3>
+    <h3>Kịch bản lợi suất và lãi vay</h3>
     <div class="schart" id="scGold"></div>
     <div class="schart" id="scCP"></div>
     <div class="schart" id="scLand"></div>
-    <div class="hint">Các đường giá vàng, cổ phiếu và BĐS là kịch bản giả định, không phải dự báo. Mô phỏng dùng giá đã xuất hiện đến từng tháng để giao dịch; không biết trước các tháng sau. “Năm 0” là 12 tháng từ tháng bắt đầu.</div>
+    <div class="schart" id="scDebtRate"></div>
+    <div class="hint">Các đường giá vàng, cổ phiếu, BĐS và lãi vay là kịch bản giả định, không phải dự báo. Với lãi vay, nhập mức trung tâm và biên độ rồi bấm “Sinh chuỗi” để tạo lãi suất cho từng năm; kéo điểm để chỉnh riêng một năm. Mọi khoản vay đang trong giai đoạn thả nổi đều dùng mức lãi của năm đó, bất kể tháng giải ngân. Mô phỏng dùng giá đã xuất hiện đến từng tháng để giao dịch; không biết trước các tháng sau. Mỗi năm trên trục là một giai đoạn 12 tháng kể từ tháng bắt đầu mô phỏng.</div>
   </div>
 
 </section>
@@ -735,12 +763,16 @@
   <div class="gridk">
     <div class="kpi"><div class="t">Tuổi hết tiền (nếu có)</div><div class="v" id="rRunOut">—</div><div class="s" id="rRunOutS">—</div></div>
     <div class="kpi"><div class="t">Thanh khoản cuối kỳ (không kể BĐS)</div><div class="v" id="rLiq">—</div><div class="s" id="rLiqS">—</div></div>
-    <div class="kpi"><div class="t">Tài sản cuối kỳ (giá trị thực)</div><div class="v" id="rReal">—</div><div class="s" id="rRealS">—</div></div>
+    <div class="kpi"><div class="t">Tổng tài sản cuối kỳ (giá trị thực)</div><div class="v" id="rReal">—</div><div class="s" id="rRealS">—</div></div>
   </div>
   <div class="gridk" style="margin-top:10px;">
     <div class="kpi"><div class="t">Lương hưu / tháng (lúc bắt đầu)</div><div class="v" id="rPension">—</div><div class="s" id="rPensionS">—</div></div>
-    <div class="kpi"><div class="t">Tài sản cuối kỳ (danh nghĩa)</div><div class="v" id="rEndW">—</div><div class="s" id="rEndWS">—</div></div>
+    <div class="kpi"><div class="t">Tổng tài sản cuối kỳ (danh nghĩa)</div><div class="v" id="rEndW">—</div><div class="s" id="rEndWS">—</div></div>
     <div class="kpi" id="rShortCard" hidden><div class="t">Tổng chi chưa được tài trợ</div><div class="v" id="rShort">—</div><div class="s" id="rShortS">—</div></div>
+  </div>
+  <div class="gridk" id="debtKpis" style="margin-top:10px;" hidden>
+    <div class="kpi"><div class="t">Dư nợ cuối kỳ</div><div class="v" id="rDebt">—</div><div class="s" id="rDebtS">—</div></div>
+    <div class="kpi"><div class="t">Tài sản ròng cuối kỳ</div><div class="v" id="rNet">—</div><div class="s" id="rNetS">—</div></div>
   </div>
   <div class="card" style="margin-top:10px;">
     <div class="kpi" style="border:0;padding:0;"><div class="t">Kiểm tra rủi ro — 1.000 đường lợi suất tương lai khác nhau</div>
@@ -757,12 +789,12 @@
     <div class="legend" id="srcLegend"></div>
     <div class="legend">
       <span style="color:#64748b;font-weight:700">╌╌ Giá trị thực (trừ lạm phát)</span>
-      <span style="color:#92400e;font-weight:700">╌╌ Nếu gửi tiết kiệm 100%</span>
+      <span id="savingsLegend" style="color:#92400e;font-weight:700">╌╌ Nếu gửi tiết kiệm 100%</span>
       <span><i style="background:#059669;width:3px;height:13px;border-radius:1px"></i>&nbsp;tuổi nghỉ hưu</span>
       <span style="color:#059669;font-weight:700">▲ sự kiện thu</span>
       <span style="color:#dc2626;font-weight:700">▼ sự kiện chi</span>
     </div>
-    <div class="hint">Đường 100% tiết kiệm giả định toàn bộ NAV ban đầu thành tiền gửi; không còn BĐS, tiền thuê hoặc tiền bán BĐS về sau.</div>
+    <div class="hint" id="savingsHint">Đường 100% tiết kiệm giả định toàn bộ NAV ban đầu thành tiền gửi; không còn BĐS, tiền thuê hoặc tiền bán BĐS về sau.</div>
   </div>
   <div class="card">
     <h3>Giá trị từng nhóm tài sản</h3>
@@ -776,12 +808,13 @@
       <span><i style="background:#eab308"></i>Vàng</span>
       <span><i style="background:#92400e"></i>Bất động sản</span>
       <span><i style="background:#1e293b;width:9px;height:3px;border-radius:1px;"></i>&nbsp;Tổng</span>
+      <span id="allocDebtLegend" hidden><i style="background:#dc2626;width:9px;height:3px;border-radius:1px;"></i>&nbsp;Dư nợ (khoản phải trừ)</span>
     </div>
-    <div class="hint">Mỗi điểm = giá trị nhóm ở cuối tháng (tiết kiệm gồm gốc và lãi tạm tính; vàng theo giá bán lại). Di chuột lên biểu đồ để xem chi tiết từng tháng.</div>
+    <div class="hint">Mỗi điểm = giá trị nhóm ở cuối tháng (tiết kiệm gồm gốc và lãi tạm tính; vàng theo giá bán lại). Dư nợ là khoản phải trừ để ra tài sản ròng, không cộng vào Tổng. Di chuột lên biểu đồ để xem chi tiết từng tháng.</div>
   </div>
   <div class="card">
     <h3>Kế hoạch theo năm</h3>
-    <div class="hint" style="margin:-2px 0 8px;">Bấm mũi tên trước năm để xem từng tháng: thu → chi → nguồn chi → bán/mua. Ngoài kỳ cân bằng chỉ bán khi cần trả chi hoặc MMF xuống dưới nửa mốc; khoản thu mới còn lại có thể đem đầu tư sau khi giữ tiền cho chi lớn sắp tới. Tiền chưa mua được vàng giữ trong MMF đến kỳ xem xét tiếp. Mốc MMF = số tháng chọn ở Tab 5 × chi thường xuyên tháng đó. Số tiền tương lai là kịch bản; trước khi làm theo, đối chiếu số dư, giá và phí giao dịch thực tế.</div>
+    <div class="hint" style="margin:-2px 0 8px;">Bấm mũi tên trước năm để xem từng tháng: thu → chi → nguồn chi → bán/mua. Ngoài kỳ cân bằng chỉ bán khi cần trả chi hoặc MMF xuống dưới nửa mốc; khoản thu mới còn lại có thể đem đầu tư sau khi giữ tiền cho chi lớn sắp tới. Tiền chưa mua được vàng giữ trong MMF đến kỳ xem xét tiếp. Mốc MMF = số tháng chọn ở Tab 5 × chi thường xuyên tháng đó và tiền trả nợ. Số tiền tương lai là kịch bản; trước khi làm theo, đối chiếu số dư, giá và phí giao dịch thực tế.</div>
     <div class="scroll" id="yearTableWrap"><table id="yearTable"></table></div>
   </div>
   <div class="bigmsg" id="concl">—</div>
@@ -820,7 +853,7 @@
       <p class="hint" id="cmpGridSummary">Sẽ tính 7.497 tổ hợp; mỗi tổ hợp có trọng số ngang nhau.</p>
     </div>
     <div id="cmpYearsOut"><p class="hint">Bấm “Tính tuổi cạn” để xem kết quả.</p></div>
-    <details class="hint"><summary>Cách tính</summary><p>Với mỗi số năm trong bảng, một bên đóng BHXH, bên kia gửi tiết kiệm đúng khoản tiền ấy theo từng tháng, tính cả lịch đã nhập ở Tab 3. Trước khi nghỉ hưu, sổ tiết kiệm chỉ sinh lãi. Từ lúc nhận hưu, mỗi tháng sổ sinh lãi trên toàn bộ số dư rồi rút ra đúng bằng lương hưu của tháng đó: người chỉ tiêu đúng bằng lương hưu, nên lãi dư ở lại sổ sinh lãi tiếp (tái đầu tư), lãi thiếu thì lấy gốc bù. Mốc “thua” là tháng đầu lãi sinh ra ít hơn lương hưu phải rút — sổ bắt đầu ăn vào gốc; mốc “cạn” là tháng đầu sổ không còn đủ tiền rút. Cả hai mốc đều đếm theo tỷ lệ tổ hợp giả định đã chọn. Tiền BHXH đã đóng trong quá khứ chỉ được dùng để so giả định, không thể chuyển thành tiền tiết kiệm hôm nay.</p></details>
+    <details class="hint"><summary>Cách tính</summary><p>Với mỗi số năm trong bảng, một bên đóng BHXH, bên kia gửi tiết kiệm đúng khoản tiền ấy theo từng tháng, tính cả lịch đã nhập ở Tab 4. Trước khi nghỉ hưu, sổ tiết kiệm chỉ sinh lãi. Từ lúc nhận hưu, mỗi tháng sổ sinh lãi trên toàn bộ số dư rồi rút ra đúng bằng lương hưu của tháng đó: người chỉ tiêu đúng bằng lương hưu, nên lãi dư ở lại sổ sinh lãi tiếp (tái đầu tư), lãi thiếu thì lấy gốc bù. Mốc “thua” là tháng đầu lãi sinh ra ít hơn lương hưu phải rút — sổ bắt đầu ăn vào gốc; mốc “cạn” là tháng đầu sổ không còn đủ tiền rút. Cả hai mốc đều đếm theo tỷ lệ tổ hợp giả định đã chọn. Tiền BHXH đã đóng trong quá khứ chỉ được dùng để so giả định, không thể chuyển thành tiền tiết kiệm hôm nay.</p></details>
   </div>
   <div class="foot">Chưa định giá tử tuất và quyền lợi khi đóng dưới 15 năm BHXH.</div>
 </section>
@@ -838,19 +871,21 @@
 
 <script src="core/model.js"></script>
 <script src="core/pension.js"></script>
-<script src="core/compare.js?v=20261002-44"></script>
-<script src="core/simulation.js"></script>
-<script src="core/strategy.js"></script>
+<script src="core/compare.js?v=20261011-96"></script>
+<script src="core/debt.js?v=20261004-94"></script>
+<script src="core/simulation.js?v=20261011-96"></script>
+<script src="core/strategy.js?v=20261011-96"></script>
 <script src="core/series.js"></script>
 <script src="core/profiles.js"></script>
-<script src="state/defaults.js"></script>
-<script src="state/persist.js"></script>
+<script src="state/defaults.js?v=20261004-94"></script>
+<script src="state/persist.js?v=20261004-94"></script>
 <script src="ui/common.js"></script>
 <script src="ui/setup.js"></script>
-<script src="ui/bhxh.js"></script>
-<script src="ui/investment.js"></script>
+<script src="ui/debt.js"></script>
+<script src="ui/bhxh.js?v=20261011-96"></script>
+<script src="ui/investment.js?v=20261004-94"></script>
 <script src="ui/strategy.js"></script>
-<script src="ui/results.js"></script>
+<script src="ui/results.js?v=20261011-96"></script>
 <script src="ui/compare.js?v=20261002-45"></script>
 <script src="ui/profiles.js"></script>
 <script src="ui/app.js"></script>

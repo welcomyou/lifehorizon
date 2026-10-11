@@ -17,15 +17,16 @@ function personLabel(p,pi){
   var n2=strTrim(p.name); return n2 || ('Người '+(pi+2));
 }
 function personAgeAt(p,idx){ return Math.floor(idx/12) - (p?p.birthYear:state.birthYear); }
-/* Mốc bắt đầu nhận hưu của MỌI người có mức > 0 — dùng vẽ đường ┄ trên biểu đồ Tab 7 */
+/* Mốc bắt đầu nhận hưu của MỌI người có mức > 0 — dùng vẽ đường ┄ trên biểu đồ Tab 7 và KPI tổng
+   hưu cả nhà (growth cần để cộng mức của từng người tại một tháng chung). */
 function pensionStarts(){
   var out=[];
   if(state.pensionMode==='simple'){
     var ps=state.pensionSimple;
-    if(ps.amount>0)out.push({name:personLabel(null,0),idx:ps.startYear*12+(ps.startMonth===undefined?1:ps.startMonth)-1,p0:ps.amount*pensionFactor(ps.startYear*12+(ps.startMonth===undefined?1:ps.startMonth)-1,NOW,state.infl)});
+    if(ps.amount>0)out.push({name:personLabel(null,0),idx:ps.startYear*12+(ps.startMonth===undefined?1:ps.startMonth)-1,growth:ps.growth,p0:ps.amount*pensionFactor(ps.startYear*12+(ps.startMonth===undefined?1:ps.startMonth)-1,NOW,state.infl)});
     (state.extraPeople||[]).forEach(function(p,i){
       var q=p.pension;
-      if(q&&q.amount>0){var ix=q.startYear*12+(q.startMonth===undefined?1:q.startMonth)-1;out.push({name:personLabel(p,i),idx:ix,p0:q.amount*pensionFactor(ix,NOW,state.infl)});}
+      if(q&&q.amount>0){var ix=q.startYear*12+(q.startMonth===undefined?1:q.startMonth)-1;out.push({name:personLabel(p,i),idx:ix,growth:q.growth,p0:q.amount*pensionFactor(ix,NOW,state.infl)});}
     });
   }
   return out;

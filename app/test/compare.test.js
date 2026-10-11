@@ -243,7 +243,7 @@ test('compare: migrate v9 điền compareCfg im lặng cho bản cũ, giữ cấ
   const c=fresh(1);
   const old=JSON.parse(JSON.stringify(c.state));delete old.compareCfg;
   let s=c.migrateState(old);
-  assert.equal(s.schemaVersion,9);
+  assert.equal(s.schemaVersion,12);
   assert.equal(s.compareCfg.xSave,6.5);                /* default newCompareCfg */
   assert.equal(s.compareCfg.bGrow,'infl');
   const edited=JSON.parse(JSON.stringify(c.state));
@@ -251,4 +251,46 @@ test('compare: migrate v9 điền compareCfg im lặng cho bản cũ, giữ cấ
   s=c.migrateState(edited);
   assert.equal(s.compareCfg.xSave,9.2);assert.equal(s.compareCfg.tutuat,123456);
   assert.equal(s.compareCfg.contribRate,22);           /* trường thiếu được bổ sung mặc định */
+});
+
+/* ===== Đợt 96 — ba lỗi Tab 8 đã sửa: sàn đếm tháng bắt buộc, lạm phát khảo sát áp đồng nhất,
+   lịch đóng lỗi bị chặn thay vì tính im lặng ===== */
+test('compare: sàn mức tham chiếu đếm theo tháng BẮT BUỘC — nn/dn tính, tn không (khớp cách đếm Tab 4)',()=>{
+  const c=fresh(2),s=c.state;c.setNow(2026*12);
+  s.birthYear=1980;s.gender='male';
+  const cfg={bStart:1.5e6,bGrow:'flat',xMin:5,xMax:5,iMin:0,iMax:0,yMin:0,yMax:0,winThreshold:100};
+  for(const [type,expectOK] of [['nn',true],['dn',true],['tn',false]]){
+    s.periods=[{from:'2006-01',to:'2025-12',type,bh:1.5e6,growth:0}];
+    const r=c.compareYearsScan(cfg,null);
+    assert.equal(r.ok,true,type);
+    assert.equal(r.floorOK,expectOK,type);                 /* đủ 20 năm BẮT BUỘC? */
+    assert.equal(r.floorOK,c.bhxhSummary().floorOK,type);  /* cùng cách đếm với bhxhSummary */
+  }
+});
+
+test('compare: lạm phát khảo sát áp đồng nhất cho trần đóng — lạm phát Tab 3 không rò vào lưới',()=>{
+  const c=fresh(2),s=c.state;c.setNow(2026*12);
+  s.birthYear=1980;s.gender='male';
+  s.periods=[{from:'2000-01',to:'2041-12',type:'nn',bh:1e8,growth:0}];   /* mức chạm trần 20× mức tham chiếu */
+  const cfg={bStart:1e8,bGrow:'infl',xMin:8,xMax:8,iMin:5,iMax:5,yMin:8,yMax:8,winThreshold:100};
+  const runs=[0,5,10].map(infl=>{s.infl=infl;const r=c.compareYearsScan(cfg,null);assert.equal(r.ok,true);return r;});
+  s.infl=0;
+  assert.deepEqual(runs[1].rows,runs[0].rows);   /* cùng tổ hợp khảo sát → cùng kết quả */
+  assert.deepEqual(runs[2].rows,runs[0].rows);
+});
+
+test('compare: lịch đóng còn lỗi → từ chối tính và nêu đúng dòng lỗi (không im lặng dùng phần còn lại)',()=>{
+  const c=fresh(2),s=c.state;c.setNow(2026*12);
+  s.birthYear=1980;s.gender='male';
+  s.periods=[{from:'2006-01',to:'2025-12',type:'dn',bh:1e7,growth:0},
+             {from:'invalid',to:'2030-12',type:'dn',bh:2e7,growth:0}];
+  const r=c.compareYearsScan({bStart:1e7,bGrow:'flat',contribRate:22,maxAge:100},null);
+  assert.equal(r.ok,false);
+  assert.match(r.error,/dòng 2/);
+  /* Lỗi của người chính không chặn phép so của người khác: lịch người thêm sạch thì tính được. */
+  s.extraPeople=[{name:'Khác',birthYear:1990,gender:'female',
+    periods:[{from:'2015-01',to:'2025-12',type:'dn',bh:1e7,growth:0}],
+    pension:{amount:0,startYear:2050,startMonth:1,growth:0}}];
+  const p=c.compareYearsScan({bStart:1e7,bGrow:'flat',contribRate:22,maxAge:100},s.extraPeople[0]);
+  assert.equal(p.ok,true);
 });

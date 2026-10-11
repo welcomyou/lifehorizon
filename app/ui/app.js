@@ -8,6 +8,7 @@
     'core/model.js':['makeWorld','generateMonthly','fitCAGR','annualCAGR'],
     'core/pension.js':['bhxhSummary','pensionProjection','pensionFromPeriods','validatePensionPeriods','retireAgeMonths','pensionFactor'],
     'core/compare.js':['newCompareCfg','compareOptimize'],
+    'core/debt.js':['debtPayment','debtBook','debtForecast'],
     'core/simulation.js':['runSim','validateState','validateErrors'],
     'core/strategy.js':['investmentStage','executeInvestment','validateInvestmentPlan'],
     'ui/strategy.js':['renderInvestmentPlan'],
@@ -16,8 +17,9 @@
     'state/persist.js':['saveState','loadState','migrateState'],
     'ui/common.js':['$','appDialog','moneyVal','fmtTr','refreshList','bindDel','seedMoneyGood','numVal','vnNumStr'],
     'ui/setup.js':['readInputs','renderTab1','renderPlots','renderMilestones','renderEvents','renderIncomePeriods'],
+    'ui/debt.js':['renderDebts','renderDebtSchedule'],
     'ui/bhxh.js':['renderPeopleTabs','renderPersonMeta','renderPensionDetails','renderFamilySummary','applyAutoPensionFor','writePensionInputs'],
-    'ui/investment.js':['renderSeriesChart'],
+    'ui/investment.js':['renderSeriesChart','renderDebtRateChart'],
     'ui/results.js':['drawMainChart','drawAllocChart','renderSimulationResults'],
     'ui/compare.js':['renderCompareTab'],
     'core/profiles.js':['PROFILE_FORMAT','PROFILE_VERSION','newProfileId','buildProfile','parseProfileText','profileStructuralErrors'],
@@ -84,7 +86,9 @@ function renderSampleBadge(){
     : '';
 }
 /* Signature toàn trạng thái — đặt lại sau mỗi lần refresh; ui/profiles.js so với baseline hồ sơ
-   đang mở để hiển thị "có thay đổi chưa lưu" và làm mốc chữ ký cho kết quả kiểm tra rủi ro. */
+   đang mở để hiển thị "có thay đổi chưa lưu" và làm mốc chữ ký cho kết quả kiểm tra rủi ro.
+   Đợt 89 — dùng stateSig (ui/common.js): loại trường thuần-xem (activePerson) nên bấm chuyển
+   người ở Tab 3 không còn bị coi là "thay đổi chưa lưu", cũng không vô hiệu kết quả rủi ro cũ. */
 var stateSignature='';
 function refresh(){
   readInputs();
@@ -93,7 +97,7 @@ function refresh(){
   renderNavBadges(vs);
   renderTabBanner(vs);
   renderSampleBadge();
-  var signature=JSON.stringify(state);
+  var signature=stateSig(state);
   stateSignature=signature;
   if(signature!==lastRiskSignature){$('riskOut').textContent='Cấu hình đã thay đổi — bấm Kiểm tra rủi ro để tính lại.';lastRiskSignature=signature;}
   $('migrationNotice').textContent=migrationMessages.join(' ');
@@ -105,6 +109,7 @@ function refresh(){
   renderFamilySummary();
   renderAssetLabels();
   renderPlots();
+  renderDebts();
   renderMilestones();
   renderEvents('chi', 'evChiList');
   renderEvents('thu', 'evThuList');
@@ -113,6 +118,7 @@ function refresh(){
   renderSeriesChart('scGold','gold','Vàng',ASSET_COLORS.gold.c);
   renderSeriesChart('scCP','cp','Quỹ Cổ phiếu/ETF',ASSET_COLORS.cp.c);
   renderSeriesChart('scLand','land','Bất động sản',ASSET_COLORS.land.c);
+  renderDebtRateChart();
   if($('t7').classList.contains('active')) renderSimulationResults(vs);
   if(typeof renderCompareTab==='function' && $('t8').classList.contains('active')) renderCompareTab(); /* Tab 8 what-if độc lập — chỉ tính khi đang mở */
   saveState(); /* mỗi lần cấu hình / dữ liệu thay đổi → lưu lại toàn bộ (F5 giữ nguyên) */
@@ -216,6 +222,28 @@ if(navSel){
   });
   navSel.onchange = function(){ navSetTab(navSel.value); refresh(); };
 }
+/* ===== Nút ⓘ cạnh tiêu đề header — popup giới thiệu phần mềm + link mã nguồn mở (yêu cầu 04/10) ===== */
+var aboutBtn = $('aboutBtn');
+if(aboutBtn){
+  aboutBtn.onclick = function(){
+    appDialog({
+      title: 'Về LifeHorizon',
+      html:
+        '<p><b>LifeHorizon</b> mô phỏng dòng tiền cuộc đời theo tháng: lương, chi phí, BHXH ' +
+        '(hưu, rút một lần), tài sản (tiết kiệm, quỹ đầu tư, vàng, bất động sản) và kế hoạch ' +
+        'đầu tư – rút tiền theo từng giai đoạn của Tab 7.</p>' +
+        '<ul style="margin:8px 0; padding-left:18px;">' +
+        '<li>Mọi phép tính chạy ngay trong trình duyệt của anh/chị — dữ liệu chỉ lưu trên máy, không gửi đi đâu.</li>' +
+        '<li>Sao lưu hoặc chuyển máy qua <b>Quản lý → Nhập/Xuất JSON</b>.</li>' +
+        '<li>Số liệu mang tính mô phỏng, kết luận chỉ đúng với kịch bản đang nhập — không phải tư vấn tài chính.</li>' +
+        '</ul>' +
+        '<p>Mã nguồn mở trên GitHub: ' +
+        '<a href="https://github.com/welcomyou/lifehorizon" target="_blank" rel="noopener noreferrer">github.com/welcomyou/lifehorizon</a></p>',
+      okText: 'Đóng'
+    });
+  };
+}
+
 document.querySelectorAll('input, select').forEach(function(el){
   if(el.id === 'navTabsSelect') return;   /* dropdown tab tự xử lý change phía trên */
   el.addEventListener('change', scheduleRefresh);

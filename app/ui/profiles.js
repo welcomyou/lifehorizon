@@ -10,8 +10,9 @@
    hồ sơ có bản nháp mới hơn file thì báo phục hồi.
    Xung đột ghi: PUT kèm ?rev=<revision>; server trả 409 khi file đã bị sửa từ ngoài → hỏi ghi đè.
    Nạp giữa ui/results.js và ui/app.js; app.js gọi profileBarInit() cuối boot.
-   ĐỌC: state, NOW, defaultState, stateSignature (app.js đặt sau mỗi refresh), lastRiskSignature
-   (results.js). GHI: state (qua migrateState khi mở/nhập), localStorage CHỈ qua persist.js
+   ĐỌC: state, NOW, defaultState, stateSignature (app.js đặt sau mỗi refresh — đã loại trường
+   thuần-xem qua stateSig, ui/common.js), lastRiskSignature (results.js). GHI: state (qua
+   migrateState khi mở/nhập), localStorage CHỈ qua persist.js
    (getOpenProfileMeta/setOpenProfileMeta/resetRescueFlags). Không đụng localStorage trực tiếp. */
 
 var prService = null;        /* {dir} khi dịch vụ hồ sơ trả lời được; null = offline (file:// hoặc server tĩnh) */
@@ -62,7 +63,8 @@ function prPutCreate(payload, attempt){
 function prDirty(){ return stateSignature !== prSavedSignature; }
 
 /* ===== Trạng thái xem (viewState): tab đang mở + năm đang mở trong bảng năm Tab 7.
-   activePerson đã nằm trong state nên không cần lưu riêng. ===== */
+   activePerson nằm trong state để lưu vào file (mở hồ sơ trả về đúng tab con người đã mở)
+   nhưng ĐÃ LOẠI khỏi chữ ký dirty — stateSig (ui/common.js, đợt 89). ===== */
 function prCaptureViewState(){
   var act = document.querySelector('nav button.active');
   return { tab: act ? act.dataset.tab : 't1', cfYear: openYearActionYear||prPendingCfYear||null };
@@ -85,6 +87,7 @@ function prActivateTab(tab){
 function prApplyState(p, baseline){
   clearTimeout(prDraftTimer);
   migrationMessages.length = 0;
+  savedOpenId = null;   /* đợt 88: state vừa thay chắc chắn thuộc hồ sơ đang mở/nháp — gỡ cờ ghép lệch từ boot */
   state = migrateState(JSON.parse(JSON.stringify(p.state)));
   if(isFinite(state.startMonth)) NOW = state.startMonth;
   resetRescueFlags();
@@ -163,7 +166,7 @@ function prCheckDraft(){
     var cleanNow = !prDirty();
     var newer = d && d.state && d.savedAt &&
       (!prOpen.savedAt || Date.parse(d.savedAt) > Date.parse(prOpen.savedAt) - 500);
-    var differs = d && d.state && JSON.stringify(d.state) !== JSON.stringify(state);
+    var differs = d && d.state && stateSig(d.state) !== stateSig(state);   /* đợt 89 — so theo stateSig: nháp chỉ khác lựa chọn xem (activePerson) không đáng báo "phục hồi nháp" */
     prDraftBanner = (cleanNow && newer && differs) ? { savedAt:d.savedAt, state:d.state, viewState:d.viewState||null } : null;
     prRenderBar();
   }).catch(function(){ prDraftBanner = null; });
@@ -313,6 +316,16 @@ function prDoSave(){
       resolve(false); return;
     }
     if(!prOpen){ prDialogSaveAs().then(resolve); return; }
+    /* Đợt 88 — chặn lưu nhầm: state đang chạy gắn với openId đọc từ bản lưu lúc boot. Nếu id đó
+       KHÁC hồ sơ đang mở thì dữ liệu trên màn hình là của hồ sơ khác (ghép lệch từ tab khác) —
+       ghi đè sẽ phá file thật, bắt lưu thành bản mới. prApplyState gỡ cờ khi state đã gắn đúng. */
+    if(typeof savedOpenId!=='undefined' && savedOpenId && savedOpenId!==prOpen.id){
+      appDialog({title:'Dữ liệu đang hiển thị thuộc hồ sơ khác',
+        html:'Dữ liệu trên màn hình được lưu trong trình duyệt cho hồ sơ mã <b>'+esc(savedOpenId)+'</b>, không phải <b>'+esc(prOpen.name||prOpen.file)+'</b>. Ghi đè bây giờ sẽ làm mất dữ liệu thật của hồ sơ này.',
+        okText:'Lưu thành hồ sơ mới', cancelText:'Không lưu'})
+      .then(function(go){ if(go) prDialogSaveAs().then(resolve); else resolve(false); });
+      return;
+    }
     var payload = buildProfile(prOpen, prOpen.name, prOpen.description, state, prCaptureViewState(), prRiskRunUsable(), (prOpen.revision||0)+1);
     prApi('PUT', '/api/profiles/file/'+encodeURIComponent(prOpen.file)+'?rev='+(prOpen.revision||0), JSON.stringify(payload))
     .then(function(res){ prMarkSaved(payload.revision, res.savedAt); resolve(true); })
@@ -635,15 +648,20 @@ function profileBarInit(){
     prService = { dir:r.dir };
     prList = r.profiles || [];
     var meta = getOpenProfileMeta();
-    var match = meta && meta.file && prList.find(function(e){ return e.file === meta.file && e.ok; });
+    /* Đợt 88 — ghép hồ sơ theo cặp nguyên tử state+openId trong bản lưu (persist.js): savedOpenId
+       là nơi tin cậy vì đi CÙNG state; meta "đang mở" là con trỏ rời rạc, tab khác có thể ghi lệch
+       (sự cố 04/10/2026). Bản lưu cũ chưa có openId → rơi về meta như trước. */
+    var wantFile = savedOpenId ? (savedOpenId+'.json') : (meta && meta.file);
+    var match = wantFile && prList.find(function(e){ return e.file === wantFile && e.ok; });
     if(match){
       return prApi('GET','/api/profiles/file/'+encodeURIComponent(match.file)).then(function(p){
         prOpen = { file:match.file, id:p.id, name:p.name, description:p.description||'', revision:p.revision||1,
           createdAt:p.createdAt||null, savedAt:p.updatedAt||null };
         prRiskRun = p.lastRiskRun || null;
         /* Làm việc dở phiên trước nằm trong localStorage: nếu khớp file thì coi như đã lưu,
-           nếu lệch thì hiển thị "có thay đổi chưa lưu" cho đúng */
-        var same = p.state && JSON.stringify(p.state) === JSON.stringify(state);
+           nếu lệch thì hiển thị "có thay đổi chưa lưu" cho đúng. Đợt 89 — so theo stateSig:
+           lệch mỗi lựa chọn xem (activePerson) vẫn coi như khớp. */
+        var same = p.state && stateSig(p.state) === stateSig(state);
         prSavedSignature = same ? stateSignature : '';
         prBaselinePending = false;
         prRenderBar();

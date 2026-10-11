@@ -27,7 +27,9 @@ function cap75Years(gender){ return gender==='female' ? 30 : 35; }
 /* Chuỗi tháng đóng của hồ sơ theo đúng thuật toán bhxhSummary (hợp nhất chồng lấn — dòng sớm thắng,
    dòng mở đóng đến hết tháng đủ tuổi, kẹp tại retIdx) + điều chỉnh theo chế độ (nn bắt đầu trước
    01/2016 quy tỷ lệ mức tham chiếu; còn lại hệ số CPI năm hưởng). Trả mảng recs tăng dần theo tháng:
-   {m, isNN, b, adj}. Đối chứng với bhxhSummary nằm trong test (pension/avg/months phải khớp tuyệt đối). */
+   {m, isNN, isComp, b, adj, p} — isComp = tháng BẮT BUỘC (khác tự nguyện, dùng đếm điều kiện sàn
+   như bhxhSummary); p = giai đoạn gốc để tính lại mức đóng bhAt theo lạm phát khác khi cần.
+   Đối chứng với bhxhSummary nằm trong test (pension/avg/months phải khớp tuyệt đối). */
 function compareRecs(person, inflPct){
   var birthYear = personBirth(person), gender = personGender(person);
   var retIdx = retireAgeMonths(birthYear, gender);
@@ -41,7 +43,7 @@ function compareRecs(person, inflPct){
     if(f0 > rawEnd){ if(p._f < first) first = p._f; return; }
     covered = Math.max(covered, rawEnd);
     var cntEnd = Math.min(rawEnd, retIdx);
-    for(var m = f0; m <= cntEnd; m++) recs.push({ m:m, isNN:p.type==='nn', b:bhAt(p, m) });
+    for(var m = f0; m <= cntEnd; m++) recs.push({ m:m, isNN:p.type==='nn', isComp:p.type!=='tn', b:bhAt(p, m), p:p });
     if(p._f < first) first = p._f;
   });
   recs.sort(function(a,b){ return a.m - b.m; });
@@ -86,7 +88,8 @@ function compareOptimize(cfg, person){
   var nnWin = (K === null || nnAll.length <= K) ? nnAll : nnAll.slice(-K);
   var nnBase = nnWin.length ? (nnWin.reduce(function(s,r){ return s + r.adj; }, 0) / nnWin.length) * nnAll.length : 0;
   var othSum = oth.reduce(function(s,r){ return s + r.adj; }, 0);
-  var compMonths = oth.length;
+  /* Điều kiện sàn đếm theo tháng BẮT BUỘC (khác tự nguyện — gồm cả nn và dn) như bhxhSummary (Tab 4). */
+  var compMonths = 0; common.forEach(function(r){ if(r.isComp) compMonths++; });
   var floorOK = compMonths >= 240 && isFinite(base.first) && base.first < 2025*12 + 6;
   var refFloor = refSalary(retStart);
   var nCommon = common.length;
@@ -223,16 +226,29 @@ function compareOptimize(cfg, person){
    kịch bản đó KHÔNG có lương hưu (bảo lưu/rút
    một lần không mô hình — ghi chú UI). Mức đóng b giữ nguyên cfg.bStart + quy tắc bGrow (không quét b).
    BHYT/tử tuất = 0 trong lưới. state.infl được ghi đè TẠM theo từng giá trị lạm phát quét (refSalary/
-   adjCoef đọc state.infl) rồi khôi phục — hàm không để rò state. */
+   adjCoef/bhAt đọc state.infl — mức đóng trong lịch tính lại theo từng giá trị) rồi khôi phục —
+   hàm không để rò state. */
 function compareYearsScan(cfg, person){
   cfg = Object.assign(newCompareCfg(), cfg || {});
   var birthYear = personBirth(person), gender = personGender(person);
+  /* F04 — lịch đóng của người đang chọn còn lỗi thì KHÔNG tính phép so, đừng im lặng dùng phần lịch
+     còn lại (cùng quy tắc pensionFromPeriods/bhxhLumpSum); lỗi dữ liệu tab khác không nằm trong
+     phép kiểm này — chỉ kiểm lịch của đúng người đang chọn. */
+  var perErrs = (function(){
+    var prefix = '';
+    if(person){
+      var nm = String(person.name==null?'':person.name).replace(/^\s+|\s+$/g,'');
+      prefix = '['+(nm || ('Người '+((state.extraPeople||[]).indexOf(person)+2)))+'] ';
+    }
+    return validatePensionPeriods(personPeriods(person), birthYear, gender, prefix).filter(function(v){ return v.level==='error'; });
+  })();
+  if(perErrs.length) return { ok:false, error:'Lịch đóng BHXH đang chọn còn lỗi — '+perErrs.map(function(v){ return v.msg; }).join(' ') };
   var retIdx = retireAgeMonths(birthYear, gender);
   var retStart = retIdx + 1, enjoyY = Math.floor(retStart/12);
   var B = retStart;
   var U = birthYear*12 + Math.round(cfg.maxAge)*12;
   if(U < B) U = B;
-  var base = compareRecs(person, 0);            // adj sẽ tính lại theo từng lạm phát quét
+  var base = compareRecs(person, 0);            // b sẽ tính LẠI theo từng lạm phát quét bên dưới (trần đóng phụ thuộc lạm phát)
   var recs = base.recs, first = base.first;
   var common = recs;
   var monthsPast = recs.filter(function(r){ return r.m < NOW; }).length;
@@ -271,12 +287,14 @@ function compareYearsScan(cfg, person){
     for(var u = B; u <= U; u++) a.push(Math.pow(1 + y/100, Math.floor((u - B)/12)));
     return a;
   });
-  /* Thành phần common không đổi theo lạm phát: tách nn/oth, cửa sổ bình quân, compMonths. */
+  /* Sàn tham chiếu: đếm theo tháng BẮT BUỘC (nn + dn, khác tự nguyện) — cùng cách đếm bhxhSummary (Tab 4).
+     Thành phần common KHÔNG đổi theo lạm phát: tách nn/oth, cửa sổ bình quân; mức đóng b và hệ số
+     điều chỉnh được tính lại theo TỪNG lạm phát quét bên dưới. */
   var nnAll = common.filter(function(r){ return r.isNN; });
   var oth = common.filter(function(r){ return !r.isNN; });
   var K = nnWindowMonths(first);
   var nnWin = (K === null || nnAll.length <= K) ? nnAll : nnAll.slice(-K);
-  var compMonths = oth.length;
+  var compMonths = 0; common.forEach(function(r){ if(r.isComp) compMonths++; });
   var floorOK = compMonths >= 240 && isFinite(first) && first < 2025*12 + 6;
   var rows = [];
   for(var N = 0; N <= nMaxYears; N++) rows.push({ N:N, months:monthsCommon + N*12, totalYears:(monthsCommon + N*12)/12,
@@ -288,6 +306,10 @@ function compareYearsScan(cfg, person){
   try{
     iVals.forEach(function(iv){
       state.infl = iv;                      // refSalary/tnFloor/adjCoef đọc state.infl
+      /* Mức đóng trong lịch cũng phải theo ĐÚNG lạm phát đang khảo sát: trần 20× mức tham chiếu
+         trôi theo lạm phát từ 2027 — giữ b cũ thì tiền gửi thay thế và bình quân hưu dùng mức
+         bị kẹp theo giả định khác (lạm phát Tab 3) thay vì tổ hợp đang xét. */
+      common.forEach(function(r){ r.b = bhAt(r.p, r.m); });
       var refFloor = refSalary(retStart);
       var adjC = function(r){ return r.b * (r.isNN && base.nnUseRef ? refSalary(retStart)/refSalary(r.m) : adjCoef(Math.floor(r.m/12), enjoyY, iv)); };
       var nnSumWin = 0; nnWin.forEach(function(r){ nnSumWin += adjC(r); });

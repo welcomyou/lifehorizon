@@ -30,11 +30,14 @@ function plotRentAt(p,mi){
   return (p.rentVnd||0)*Math.pow(1+state.infl/100,from/12)*Math.pow(1+(p.rentGrowth||0)/100,Math.floor((mi-from)/12));
 }
 /* Chi phí sửa chữa/duy tu/bảo trì/đầu tư thêm phát sinh cuối tháng 12 của năm đã chọn (năm dương lịch),
-   nhân lạm phát từ NOW tới tháng phát sinh; chỉ tính từ năm sở hữu trở đi. */
+   nhân lạm phát từ NOW tới tháng phát sinh; chỉ tính từ năm sở hữu trở đi; BĐS có lịch bán thì thôi
+   tính các chi PHÁT SINH SAU tháng bán (chi trùng tháng bán vẫn tính — quy ước cuối tháng).
+   runSim KHÔNG dùng hàm này cho khoản chi thực tế: bản chạy cần biết trạng thái sold từng BĐS
+   (gồm cả bán khẩn cấp) — xem vòng lặp bên dưới. */
 function plotExpenseAt(m){
   var t=0;state.landPlots.forEach(function(p){
-    var ownM=NOW+plotOwnIdx(p);
-    (p.expenses||[]).forEach(function(x){if(x.y*12+11===m&&m>=ownM)t+=(x.amount||0)*Math.pow(1+state.infl/100,(m-NOW)/12);});
+    var ownM=NOW+plotOwnIdx(p),saleM=p.saleYear==null?Infinity:p.saleYear*12+11;
+    (p.expenses||[]).forEach(function(x){if(x.y*12+11===m&&m>=ownM&&m<=saleM)t+=(x.amount||0)*Math.pow(1+state.infl/100,(m-NOW)/12);});
   });
   return t;
 }
@@ -127,9 +130,10 @@ function savingsDeficits(forecast,from,plots){
     var rent=0;
     (plots||[]).forEach(function(p){
       if(p.sold||!p.rent||(p.saleYear!=null&&r.m>p.saleYear*12+11))return;
+      if(from+j===p.own&&(state.debts||[]).some(function(d){return d.startMonth!=null&&d.plotId===p.id;}))return;
       rent+=plotRentAt(p,from+j);
     });
-    return Math.max(0,r.expense+r.eventOut-r.salary-r.pension-(r.eventIn||0)-rent);
+    return Math.max(0,r.expense+r.eventOut+(r.debtPayment||0)-r.salary-r.pension-(r.eventIn||0)-(r.loanDraw||0)-rent);
   });
 }
 function planSavings(book,deficits,cash){
@@ -151,7 +155,9 @@ function runSim(withBhxh,opt){
   var chi=state.goldChi,ask=state.goldPrice,cpIdx=1,cpPeak=1,goldPeak=ask;
   /* Mỗi BĐS có chuỗi giá RIÊNG bắt đầu tick từ tháng sở hữu (ownIdx): BĐS nhận sau không nằm
      trong NAV trước đó; giá trị nhập đã được nhân lạm phát tới tháng nhận thành baseNom. */
-  var plots=state.landPlots.map(function(p){var own=plotOwnIdx(p);return {id:p.id,label:p.label,ownYear:p.ownYear,own:own,baseNom:plotValue(p)*Math.pow(1+state.infl/100,own/12),area:p.area,rent:p.rent,rentVnd:p.rentVnd||0,rentFromYear:p.rentFromYear==null?null:p.rentFromYear,rentGrowth:p.rentGrowth||0,saleYear:p.saleYear,salePrice:p.salePrice,sellable:p.sellable!==false,idx:1,sold:false};});
+  var plots=state.landPlots.map(function(p){var own=plotOwnIdx(p);return {id:p.id,label:p.label,ownYear:p.ownYear,own:own,baseNom:plotValue(p)*Math.pow(1+state.infl/100,own/12),area:p.area,rent:p.rent,rentVnd:p.rentVnd||0,rentFromYear:p.rentFromYear==null?null:p.rentFromYear,rentGrowth:p.rentGrowth||0,saleYear:p.saleYear,salePrice:p.salePrice,sellable:p.sellable!==false,expenses:p.expenses||[],idx:1,sold:false};});
+  var boughtPlots={};(state.debts||[]).forEach(function(d){if(d.startMonth!=null&&d.plotId)boughtPlots[d.plotId]=true;});
+  var debts=debtBook();
   var years=[],months=[],firstShort=-1,shortfall=0,pensionGot=0,evIn=0,evOut=0,landSold=0,initial=0,curMi=0;
   /* MMF là nguồn chi trực tiếp; nhãn nguồn theo tiền đã rút từ MMF. Tiền bán tài sản nạp vào
      MMF được giữ theo nguồn cho tới khi dùng để chi, nên tái cân bằng không tự đổi màu đường NAV. */
@@ -171,6 +177,14 @@ function runSim(withBhxh,opt){
     return out;
   }
   var forecast=investmentForecast(withBhxh),previousStage=null,cpHistory=[1];
+  /* BĐS bán (theo lịch hoặc khẩn cấp) thì gỡ các khoản chi duy tu CÒN LẠI của BĐS đó khỏi dự báo,
+     để dự phòng MMF và kỳ hạn sổ không còn chuẩn bị tiền cho khoản chi không tồn tại. */
+  function stripPlotForecast(p,fromMi){
+    (p.expenses||[]).forEach(function(x){
+      var emi=x.y*12+11-NOW;
+      if(emi>fromMi&&emi<count)forecast[emi].eventOut=Math.max(0,forecast[emi].eventOut-(x.amount||0)*Math.pow(1+state.infl/100,emi/12));
+    });
+  }
   var strategyStats={stockSoldInDrawdown:0,proactiveSales:0,reserveShortMonths:0};
   /* M1 — hưu gia đình: dựng MỘT LẦN trước vòng lặp mốc hưởng/mức/tăng của từng người;
      từng tháng cộng các dòng hưu đã đến hạn theo đúng công thức hai giai đoạn của người đó. */
@@ -186,40 +200,45 @@ function runSim(withBhxh,opt){
     var found=null;state.incomePeriods.forEach(function(p){var end=p.toY===null?summary.retireIdx:p.toY*12+11;if(m>=p.fromY*12&&m<=end)found=p;}); /* pha mở chạy đến HẾT tháng đủ tuổi nghỉ hưu */
     return found;
   }
-  initial=total();
+  initial=total();var initialDebt=debtBalance(debts);
   planSavings(savings,savingsDeficits(forecast,0,plots),a.mmf);
   var lastTrade={};
   for(var mi=0;mi<count;mi++){
     var m=NOW+mi,year=Math.floor(m/12),elapsed=Math.floor(mi/12),before=total();
     curMi=mi;
     var ya=years[years.length-1];
-    if(!ya||ya.year!==year){ya={year:year,age:year-state.birthYear,inc:0,pen:0,exp:0,evIn:0,evOut:0,landSold:0,short:0,months:0,srcDrawn:{},effDrawn:{},tkLost:0};years.push(ya);}
+    if(!ya||ya.year!==year){ya={year:year,age:year-state.birthYear,inc:0,pen:0,exp:0,loanDraw:0,debtPaid:0,debtInterest:0,evIn:0,evOut:0,landSold:0,short:0,months:0,srcDrawn:{},effDrawn:{},tkLost:0};years.push(ya);}
     var mmfGrowth=Math.pow(1+state.rates.mmf/100,1/12);
     a.mmf*=mmfGrowth;mmfLots.forEach(function(lot){lot.amount*=mmfGrowth;});
     tp.tick();
     savings.tick();a.cp*=1+series.cp[mi];cpIdx*=1+series.cp[mi];ask*=1+series.gold[mi];
-    plots.forEach(function(p){if(mi>=p.own)p.idx*=1+series.land[mi];});
+    plots.forEach(function(p){if(mi>=p.own&&!(mi===p.own&&boughtPlots[p.id]))p.idx*=1+series.land[mi];});
     cpPeak=Math.max(cpPeak,cpIdx);goldPeak=Math.max(goldPeak,ask);
     cpHistory.push(cpIdx);
     var stage=investmentStageAt(plan,m),trades=[],strategy=null;
-    var marketPnL=total()-before,phase=incomeAt(m);
+    var marketPnL=total()-before,phase=incomeAt(m),loanDraw=debtDraw(debts,mi),debtPayoff=0,debtSaleInterest=0;
     /* Đợt 11 — bỏ chế độ "theo lạm phát" của giai đoạn thu nhập: tăng trưởng luôn theo % đã nhập
        (bản lưu cũ có followInfl được migrateState quy về growth = lạm phát lúc migrate). */
     var salary=salaryAt(m,summary);
-    var rent=0;plots.forEach(function(p){if(p.rent&&!p.sold&&!(p.saleYear!=null&&m>p.saleYear*12+11))rent+=plotRentAt(p,mi);}); /* sold từ tháng sau bán → hết thuê hẳn; plotRentAt tự guard năm bắt đầu thuê */
+    var rent=0;plots.forEach(function(p){if(p.rent&&!p.sold&&!(p.saleYear!=null&&m>p.saleYear*12+11)&&!(mi===p.own&&boughtPlots[p.id]))rent+=plotRentAt(p,mi);}); /* mua cuối tháng: thuê từ tháng sau */
     var pension=0;
     if(withBhxh){
       if(state.pensionMode==='simple')pensioners.forEach(function(pp){pension+=pensionMonthly(pp.amount,pp.start,pp.growth,state.infl,NOW,m);});
       else if(summary.eligible&&m>=summary.retStart)pension=summary.pension*Math.pow(1+state.pensionIdx/100,Math.floor((m-summary.retStart)/12));
     }
     var expense=expensesAtY(elapsed),eventOut=0,eventIn=0;
-    var plotExp=plotExpenseAt(m);eventOut+=plotExp; /* chi sửa chữa/duy tu BĐS: cuối tháng 12 năm chọn, đã gồm lạm phát */
-    var ordinary=salary+rent+pension,sales=0,salesPnL=0,goldCost=0,tkLost=0,tpFee=0,cpFee=0,drawn={},refillBySrc={},mmfSpentBySrc={};
+    /* Chi duy tu tính trên bản chạy: BĐS đã bán (theo lịch hoặc khẩn cấp) không còn phát sinh;
+       chi trùng tháng bán vẫn tính vì bán diễn ra cuối tháng. */
+    var plotExp=0;plots.forEach(function(p){if(p.sold||mi<p.own)return;(p.expenses||[]).forEach(function(x){if(x.y*12+11===m)plotExp+=(x.amount||0)*Math.pow(1+state.infl/100,(m-NOW)/12);});});
+    var purchase=debtPurchaseAt(mi);eventOut+=plotExp+purchase; /* BĐS mua bằng vay: ghi đủ giá mua khi nhận */
+    var ordinary=salary+rent+pension+loanDraw,sales=0,salesPnL=0,goldCost=0,tkLost=0,tpFee=0,cpFee=0,drawn={},refillBySrc={},mmfSpentBySrc={};
     // All rental income is earned through this month's end; a sale stops next month's rent.
     plots.forEach(function(p){
       if(!p.sold&&mi>=p.own&&p.saleYear!==null&&p.saleYear!==undefined&&m===p.saleYear*12+11){
         var marked=p.baseNom*p.idx,proceeds=p.salePrice===null||p.salePrice===undefined?marked:p.salePrice*Math.pow(1+state.infl/100,(m-NOW)/12);
-        sales+=proceeds;salesPnL+=proceeds-marked;p.sold=true;ordinary+=proceeds;
+        var settlement=debtSettlePlot(debts,p.id,proceeds,mi);debtPayoff+=settlement.paid;debtSaleInterest+=settlement.interest;
+        sales+=proceeds;salesPnL+=proceeds-marked;p.sold=true;ordinary+=proceeds-settlement.paid;
+        stripPlotForecast(p,mi);
       }
     });
     state.events.forEach(function(e){
@@ -228,7 +247,8 @@ function runSim(withBhxh,opt){
       if(e.kind==='chi')eventOut+=value;
       else {eventIn+=value;ordinary+=value;} /* Đợt 14: mọi dòng thu đi qua chiến lược — không còn tỷ lệ riêng của sự kiện */
     });
-    var external=salary+rent+pension+eventIn,required=expense+eventOut;
+    var dues=debtDues(debts,mi),debtDue=dues.reduce(function(s,x){return s+x.due;},0);
+    var external=salary+rent+pension+eventIn+loanDraw,required=expense+eventOut+debtDue;
     var ordinaryUsed=Math.min(ordinary,required);ordinary-=ordinaryUsed;var need=required-ordinaryUsed;
     function record(k,v){if(v>0){drawn[k]=(drawn[k]||0)+v;ya.srcDrawn[k]=(ya.srcDrawn[k]||0)+v;}}
     // Internal transfers only: selling never counts as external income or new NAV.
@@ -323,12 +343,21 @@ function runSim(withBhxh,opt){
     if(need>1e-7){
       plots.filter(function(p){return !p.sold&&p.sellable&&mi>=p.own&&p.baseNom>0;}).sort(function(a,b){return a.baseNom*a.idx-b.baseNom*b.idx;}).forEach(function(p){
         if(need<=1e-7)return;
-        var proceeds=p.baseNom*p.idx,used=Math.min(proceeds,need);
-        p.sold=true;sales+=proceeds;need-=used;ordinary+=proceeds-used;record('land',used);
+        var proceeds=p.baseNom*p.idx,settlement=debtSettlePlot(debts,p.id,proceeds,mi),netSale=proceeds-settlement.paid;
+        var nextDues=debtDues(debts,mi),nextDue=nextDues.reduce(function(s,x){return s+x.due;},0),relief=debtDue-nextDue;
+        dues=nextDues;debtDue=nextDue;required-=relief;
+        var available=netSale+relief,used=Math.min(available,need);
+        debtPayoff+=settlement.paid;debtSaleInterest+=settlement.interest;p.sold=true;sales+=proceeds;need-=used;ordinary+=available-used;record('land',Math.min(netSale,used));
+        stripPlotForecast(p,mi);
       });
     }
     var shortage=need>1e-6?need:0;
     if(shortage){shortfall+=shortage;if(firstShort<0)firstShort=m;}
+    var debtStep=debtApplyDues(dues,Math.min(debtDue,required-shortage));
+    if(debtPayoff>0||debtStep.paid<debtDue-1e-7){
+      forecast[mi].debtPayment=debtDue;
+      debtFuturePayments(debts,mi+1,count).forEach(function(payment,j){forecast[mi+1+j].debtPayment=payment;});
+    }
     // Pool all remaining inflows once; the investment stage governs the whole portfolio.
     // Allocate only after all current-month expenses have been funded.
     var totalIn=ordinary; /* Đợt 14: mọi nguồn thu hợp một dòng duy nhất, chia theo chiến lược đang chạy */
@@ -387,17 +416,22 @@ function runSim(withBhxh,opt){
     var lotBalance=mmfLots.reduce(function(s,lot){return s+lot.amount;},0);
     if(Math.abs(lotBalance-a.mmf)>Math.max(.01,a.mmf*1e-10))throw new Error('Đối chiếu số dư MMF không khớp tại '+ymToStr(m)+'.');
     planSavings(savings,savingsDeficits(forecast,mi+1,plots),a.mmf);
-    var ending=total(),expected=before+marketPnL+salesPnL+external-(required-shortage)-goldCost-tkLost-tpFee-cpFee;
+    var ending=total(),expected=before+marketPnL+salesPnL+external-(required-shortage)-debtPayoff-goldCost-tkLost-tpFee-cpFee;
     var ledgerError=ending-expected;
     if(!isFinite(ending)||!isFinite(expected)||Math.abs(ledgerError)>Math.max(.01,Math.abs(ending)*1e-10))throw new Error('Đối chiếu NAV không khớp tại '+ymToStr(m)+'.');
-    var snap={mi:mi,year:year,month:m%12+1,age:year-state.birthYear,mmf:a.mmf,tk:savings.value(),tkPrincipal:savings.principal(),tkAccrued:savings.value()-savings.principal(),tp:tp.value(),cp:a.cp,gold:chi*goldBid(ask),chi:chi,goldAsk:ask,goldBid:goldBid(ask),land:landValue(),area:plots.reduce(function(v,p){return v+(p.sold||mi<p.own?0:p.area);},0),total:ending,liquid:a.mmf+savings.principal()+tp.value()+a.cp+chi*goldBid(ask),real:ending/Math.pow(1+state.infl/100,(mi+1)/12),short:shortage,drawn:drawn,expense:expense,
+    var remainingDebt=debtBalance(debts);
+    /* Thanh khoản = giá trị rút RÒNG: TK chỉ đếm gốc (lãi chưa kỳ hạn rút là mất), TP trừ phí rút
+       sớm các lô còn trẻ, CP trừ phí bán; NAV (total) giữ giá trị gộp riêng — phí không bị trừ hai lần. */
+    var tpNet=tp.lots.reduce(function(s,l){return s+l.principal*(l.age>=tp.minAge?1:1-tp.earlyFee);},0);
+    var cpNet=a.cp*(1-(state.rates.cpSellFee||0)/100);
+    var snap={mi:mi,year:year,month:m%12+1,age:year-state.birthYear,mmf:a.mmf,tk:savings.value(),tkPrincipal:savings.principal(),tkAccrued:savings.value()-savings.principal(),tp:tp.value(),cp:a.cp,gold:chi*goldBid(ask),chi:chi,goldAsk:ask,goldBid:goldBid(ask),land:landValue(),area:plots.reduce(function(v,p){return v+(p.sold||mi<p.own?0:p.area);},0),total:ending,debt:remainingDebt,netWorth:ending-remainingDebt,liquid:a.mmf+savings.principal()+tpNet+cpNet+chi*goldBid(ask),real:ending/Math.pow(1+state.infl/100,(mi+1)/12),short:shortage,drawn:drawn,expense:expense,
       /* F15/U02 — phân tách dòng thu và lệnh đầu tư của tháng để dán nhãn nguồn chi và đối chiếu */
-      salary:salary,rent:rent,pension:pension,eventIn:eventIn,eventOut:eventOut,plotExp:plotExp,phaseFrom:state.lifePlan?(currentRow?Math.floor(currentRow.from/12):null):(phase?phase.fromY:null),
+      salary:salary,rent:rent,pension:pension,eventIn:eventIn,eventOut:eventOut,plotExp:plotExp,propertyPurchase:purchase,loanDraw:loanDraw,debtDue:debtDue,debtPaid:debtStep.paid,debtInterest:debtStep.interest+debtSaleInterest,debtPrincipal:debtStep.principal,debtPayoff:debtPayoff,phaseFrom:state.lifePlan?(currentRow?Math.floor(currentRow.from/12):null):(phase?phase.fromY:null),
       topup:topup,bought:bought,goldLeft:goldLeft,refillBySrc:refillBySrc,mmfSpentBySrc:mmfSpentBySrc,effDrawn:eff,
-      ledger:{opening:before,marketPnL:marketPnL,salePnL:salesPnL,externalIn:external,propertyProceeds:sales,plannedOut:required,fundedOut:required-shortage,goldSpreadCost:goldCost,savingsForfeited:tkLost,tpFee:tpFee,cpFee:cpFee,closing:ending,error:ledgerError}};
+      ledger:{opening:before,marketPnL:marketPnL,salePnL:salesPnL,externalIn:external,propertyProceeds:sales,plannedOut:required,fundedOut:required-shortage,debtPayoff:debtPayoff,goldSpreadCost:goldCost,savingsForfeited:tkLost,tpFee:tpFee,cpFee:cpFee,closing:ending,error:ledgerError}};
     snap.strategy=strategy; /* Đợt 14: chiến lược luôn chạy — mỗi tháng đều có nhãn giai đoạn */
     if(!opt.compact)months.push(snap);
-    ya.end=snap;ya.real=snap.real;ya.months++;ya.inc+=salary+rent;ya.pen+=pension;ya.exp+=expense;ya.evIn+=eventIn;ya.evOut+=eventOut;ya.landSold+=sales;ya.short+=shortage;ya.tkLost+=tkLost;
+    ya.end=snap;ya.real=snap.real;ya.months++;ya.inc+=salary+rent;ya.pen+=pension;ya.exp+=expense;ya.loanDraw+=loanDraw;ya.debtPaid+=debtStep.paid+debtPayoff;ya.debtInterest+=debtStep.interest+debtSaleInterest;ya.evIn+=eventIn;ya.evOut+=eventOut;ya.landSold+=sales;ya.short+=shortage;ya.tkLost+=tkLost;
     pensionGot+=pension;evIn+=eventIn;evOut+=eventOut;landSold+=sales;
   }
   /* F15/R10 — nhãn "nguồn chi" theo dòng tiền thật: tháng không rút tài sản thì nguồn chính là
@@ -408,10 +442,10 @@ function runSim(withBhxh,opt){
     var keys=Object.keys(y.effDrawn).sort(function(a,b){return y.effDrawn[b]-y.effDrawn[a];});
     if(y.short){y.src='KHÔNG ĐỦ';return;}
     if(keys.length){y.src=names[keys[0]];return;}
-    var flows=[['Lương hưu',y.pen],['Thu nhập',y.inc],['BĐS',y.landSold],['Thu sự kiện',y.evIn]].sort(function(a,b){return b[1]-a[1];});
+    var flows=[['Lương hưu',y.pen],['Thu nhập',y.inc],['BĐS',y.landSold],['Thu sự kiện',y.evIn],['Khoản vay',y.loanDraw]].sort(function(a,b){return b[1]-a[1];});
     y.src=flows[0][1]>0?flows[0][0]:'Tích lũy';
   });
-  var result={years:years,months:months,shortfall:shortfall,firstShort:firstShort,pensionGot:pensionGot,evIn:evIn,evOut:evOut,landSold:landSold,initial:initial,retireIdx:summary.retireIdx,bhxh:summary,bhtnGot:0,lumpGot:0,doLump:false,savingsForfeited:savings.forfeited,tpRedemptionFees:tp.fees};
+  var result={years:years,months:months,shortfall:shortfall,firstShort:firstShort,pensionGot:pensionGot,evIn:evIn,evOut:evOut,landSold:landSold,initial:initial,initialDebt:initialDebt,retireIdx:summary.retireIdx,bhxh:summary,bhtnGot:0,lumpGot:0,doLump:false,savingsForfeited:savings.forfeited,tpRedemptionFees:tp.fees};
   result.strategyStats=strategyStats;return result;
 }
 /* ===== Đường so sánh "Nếu 100% tài khoản là tiết kiệm" (Tab 7) =====
@@ -420,19 +454,22 @@ function runSim(withBhxh,opt){
    chia sổ đáo hạn theo chi thiếu 12 tháng tới, còn lại gửi 12 tháng. Lãi nhập gốc
    khi đáo hạn, rút trước hạn mất lãi kỳ này của phần rút.
    Mỗi tháng cộng dòng tiền đời sống LẤY TỪ LẦN CHẠY engine (snap): lương +
-   hưu + thu sự kiện − chi thường xuyên − chi sự kiện. Không còn BĐS nên KHÔNG có tiền thuê và không
-   có các đợt bán BĐS (kể cả bán có lịch); thiếu chi rút hết tài khoản vẫn thiếu → NAV chạm 0 và ghi
-   thiếu chi (không tạo NAV âm — cùng quy tắc với engine). Lãi sinh TRƯỚC, dòng tiền vào CUỐI tháng —
-   đúng nhịp tài sản/dòng tiền của runSim. THUẦN: chỉ đọc sim + state, trả {nav[], shortfall,
-   firstShort, rate, seed}; không ghi state, không đụng runSim (vân tay golden giữ nguyên). */
+   hưu + thu sự kiện − chi thường xuyên − chi sự kiện. Không còn BĐS nên KHÔNG có tiền thuê, không
+   có các đợt bán BĐS (kể cả bán có lịch) và KHÔNG có chi duy tu BĐS hay tiền mua BĐS bằng vay —
+   hai khoản gắn BĐS được gỡ khỏi chi sự kiện của snap. Thiếu chi rút hết tài khoản vẫn thiếu →
+   NAV chạm 0 và ghi thiếu chi (không tạo NAV âm — cùng quy tắc với engine). Lãi sinh TRƯỚC, dòng
+   tiền vào CUỐI tháng — đúng nhịp tài sản/dòng tiền của runSim. THUẦN: chỉ đọc sim + state, trả
+   {nav[], shortfall, firstShort, rate, seed}; không ghi state, không đụng runSim (vân tay golden
+   giữ nguyên). */
 function savingsOnlyNav(sim){
   var ms=(sim&&sim.months)||[],savings=new SavingsBook(sim?sim.initial:0,state.rates.tk,12);
   var nav=[],shortfall=0,firstShort=-1;
-  var forecast=ms.map(function(m){return {salary:m.salary||0,pension:m.pension||0,eventIn:m.eventIn||0,expense:m.expense||0,eventOut:m.eventOut||0};});
+  var forecast=ms.map(function(m){return {salary:m.salary||0,pension:m.pension||0,eventIn:m.eventIn||0,expense:m.expense||0,
+    eventOut:Math.max(0,(m.eventOut||0)-(m.plotExp||0)-(m.propertyPurchase||0))};});
   planSavings(savings,savingsDeficits(forecast,0,[]),0);
   ms.forEach(function(m,i){
     savings.tick();
-    var flow=(m.salary||0)+(m.pension||0)+(m.eventIn||0)-(m.expense||0)-(m.eventOut||0);
+    var flow=(m.salary||0)+(m.pension||0)+(m.eventIn||0)-(m.expense||0)-forecast[i].eventOut;
     if(flow<0){
       var need=-flow,withdrawal=savings.withdraw(need);
       var lack=need-withdrawal.got;
@@ -462,6 +499,15 @@ function validateState(plan){
   if(state.rates.cpSellFee!==undefined)number(state.rates.cpSellFee,'Phí bán quỹ cổ phiếu/ETF','t6',0,10,false);
   if(state.rates.tpEarlyFee!==undefined)number(state.rates.tpEarlyFee,'Phí rút quỹ trái phiếu trước hạn','t6',0,10,false);
   if(state.rates.tpMinMonths!==undefined)number(state.rates.tpMinMonths,'Số tháng giữ quỹ trái phiếu để miễn phí rút','t6',1,120,true);
+  var floatingYears={};
+  if(!Array.isArray(state.debtFloatingRates)||!state.debtFloatingRates.length)add('error','t6','Kịch bản lãi vay thả nổi cần mốc năm 0.');
+  else state.debtFloatingRates.forEach(function(row){
+    number(row.fromY,'Năm thứ của lãi vay thả nổi','t6',0,100,true);
+    number(row.rate,'Lãi vay thả nổi','t6',0,100,false);
+    if(floatingYears[row.fromY])add('error','t6','Mốc lãi vay thả nổi bị trùng năm thứ '+row.fromY+'.');
+    floatingYears[row.fromY]=true;
+  });
+  if(!floatingYears[0])add('error','t6','Kịch bản lãi vay thả nổi cần mốc năm 0.');
   Object.keys(state.assets).forEach(function(k){number(state.assets[k],'Tài sản '+k,'t2',0,1e16,false);});
   number(state.goldChi,'Số chỉ vàng','t2',0,1e9,true);number(state.goldPrice,'Giá mua vàng','t2',1,1e15,false);number(state.goldSpread,'Chênh lệch giá vàng','t6',0,99,false);
   SERIES_KEYS.forEach(function(k){var meta=state.seriesMeta[k];number(meta.cagr,'CAGR '+k,'t6',-.65,.8,false);number(meta.sigma,'Độ biến động '+k,'t6',0,.8,false);if(state.series[k].some(function(r){return !finiteNumber(r)||r<=-1;}))add('error','t6','Chuỗi '+k+' có lợi suất tháng không hợp lệ.');});
@@ -509,12 +555,47 @@ function validateState(plan){
       if(x.y*12+11>end)add('warn','t2','BĐS '+p.label+': chi phí năm '+x.y+' nằm sau kỳ mô phỏng, chưa thực hiện.');
     });
   });
+  /* Khoản vay: một BĐS chỉ gắn một khoản vay để lịch mua/bán không bị cộng trùng.
+     BĐS mua tương lai chỉ hỗ trợ giải ngân đúng tháng bắt đầu sở hữu (tháng 1). */
+  var debtIds={},linkedPlots={};
+  (state.debts||[]).forEach(function(d,i){
+    var label=d.label||('Khoản vay '+(i+1));
+    if(!d.id||debtIds[d.id])add('error','t2',label+': mã khoản vay thiếu hoặc trùng.');debtIds[d.id]=true;
+    if(['fixed','fixed-floating'].indexOf(d.rateMode)<0)add('error','t2',label+': cách tính lãi không hợp lệ.');
+    number(d.amount,label+' — số tiền vay/dư nợ','t2',1,1e17,false);
+    number(d.termMonths,label+' — số tháng còn trả','t2',1,1200,true);
+    number(d.rate,label+' — lãi suất cố định','t2',0,100,false);
+    number(d.floatingSpread,label+' — chênh lệch lãi thả nổi','t2',-100,100,false);
+    number(d.introMonths,label+' — số tháng lãi ban đầu','t2',0,1199,true);
+    if(d.rateMode==='fixed-floating'&&finiteNumber(d.termMonths)&&finiteNumber(d.introMonths)&&d.introMonths>=d.termMonths)
+      add('error','t2',label+': kỳ lãi cố định phải ngắn hơn thời hạn còn trả.');
+    if(d.rateMode==='fixed-floating'&&finiteNumber(d.floatingSpread))state.debtFloatingRates.forEach(function(row){
+      if(finiteNumber(row.rate)&&(row.rate+d.floatingSpread<0||row.rate+d.floatingSpread>100))
+        add('error','t2',label+': lãi thả nổi cộng chênh lệch phải trong 0–100%/năm.');
+    });
+    if(d.startMonth!=null){
+      number(d.startMonth,label+' — tháng giải ngân','t2',NOW+1,2200*12,true);
+      if(d.startMonth>end)add('warn','t2',label+': giải ngân sau kỳ mô phỏng, chưa xuất hiện trong kết quả.');
+    }
+    if(d.plotId){
+      var linked=state.landPlots.find(function(p){return p.id===d.plotId;});
+      if(!linked)add('error','t2',label+': không tìm thấy BĐS đã gắn.');
+      else{
+        if(linkedPlots[d.plotId])add('error','t2','BĐS '+linked.label+' đang gắn nhiều khoản vay — chỉ chọn một khoản.');
+        linkedPlots[d.plotId]=true;
+        var ownMi=plotOwnIdx(linked);
+        if(d.startMonth==null&&ownMi>0)add('error','t2',label+': dư nợ hiện tại không thể gắn BĐS chưa sở hữu.');
+        if(d.startMonth!=null&&d.startMonth-NOW!==ownMi)add('error','t2',label+': tháng giải ngân phải trùng tháng bắt đầu sở hữu BĐS ('+ymToStr(NOW+ownMi)+').');
+        if(d.startMonth!=null&&ownMi===0)add('error','t2',label+': vay mới không thể ghi mua BĐS đã sở hữu từ đầu kỳ.');
+      }
+    }
+  });
   if(state.pensionMode==='simple'){var ps=state.pensionSimple;number(ps.amount,'Lương hưu','t3',0,1e15,false);number(ps.startYear,'Năm hưởng hưu','t3',1900,2200,true);number(ps.startMonth===undefined?1:ps.startMonth,'Tháng hưởng hưu','t3',1,12,true);number(ps.growth,'Tăng lương hưu','t3',-99,100,false);}
   /* Bàn giao CPI mục 7.2 + review F05 (11/09): bản lưu cũ chưa xác nhận nghĩa của mức hưu
      (amountBasis 'unknown') không được đưa vào mô phỏng theo giả định — chặn tới khi người dùng
      chọn nghĩa ở Tab 3. Lỗi KHÔNG refOnly: đây là đầu vào hưu đang dùng, không phải dữ liệu tham khảo. */
   if(state.pensionMode==='simple'&&state.pensionSimple.amount>0&&state.pensionSimple.amountBasis==='unknown')
-    add('error','t3','Mức hưu bản lưu cũ chưa xác nhận nghĩa (giá hiện tại hay giá tại tháng hưởng) — chọn một trong hai ở khung "Lương hưu — nhập trực tiếp" (Tab 3) trước khi mô phỏng.');
+    add('error','t3','Mức hưu bản lưu cũ chưa xác nhận nghĩa (giá hiện tại hay giá tại tháng hưởng) — chọn một trong hai ở khung "Lương hưu — nhập trực tiếp" (Tab 4) trước khi mô phỏng.');
   /* M1 — thành viên gia đình thêm (state.extraPeople): hồ sơ hưu nhập tay cùng quy tắc người chính;
      tên người đứng trong ngoặc để phân biệt lỗi của từng người. */
   (state.extraPeople||[]).forEach(function(p0,pi){
@@ -525,7 +606,7 @@ function validateState(plan){
     var q=p0.pension||{};
     number(q.amount,'Lương hưu ('+lb+')','t3',0,1e15,false);number(q.startYear,'Năm hưởng hưu ('+lb+')','t3',1900,2200,true);number(q.startMonth===undefined?1:q.startMonth,'Tháng hưởng hưu ('+lb+')','t3',1,12,true);number(q.growth,'Tăng lương hưu ('+lb+')','t3',-99,100,false);
     if(state.pensionMode==='simple'&&q.amount>0&&q.amountBasis==='unknown')
-      add('error','t3',lb+': Mức hưu bản lưu cũ chưa xác nhận nghĩa (giá hiện tại hay giá tại tháng hưởng) — chọn một trong hai ở khung "Lương hưu — nhập trực tiếp" (Tab 3) trước khi mô phỏng.');
+      add('error','t3',lb+': Mức hưu bản lưu cũ chưa xác nhận nghĩa (giá hiện tại hay giá tại tháng hưởng) — chọn một trong hai ở khung "Lương hưu — nhập trực tiếp" (Tab 4) trước khi mô phỏng.');
   });
   /* F04 — giai đoạn đóng BHXH: kiểm tra riêng trước summary/Generate; lỗi chỉ rõ dòng gây ra.
      refOnly: toàn bộ nhóm này là dữ liệu tham khảo — sai chỉ khóa Generate/tổng hợp tham khảo (R06).

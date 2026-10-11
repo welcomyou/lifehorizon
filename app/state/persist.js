@@ -14,10 +14,21 @@ var savingBlocked=false;
    không phải state mặc định đang hiển thị. */
 var saveFailed=false, rescueRaw=null;
 var SAVE_KEY = 'lifesim_vn_state_v1';
+/* Đợt 88 — id hồ sơ mà state trong bản lưu thuộc về (đọc MỘT LẦN lúc boot trong loadState).
+   saveState ghi nó vào CÙNG bản ghi với state (nguyên tử) nhưng không đụng biến này: hai tab dùng
+   chung khóa localStorage, con trỏ "hồ sơ đang mở" nằm khóa riêng có thể bị tab khác ghi lệch —
+   ghép state-với-hồ sơ theo cặp nguyên tử thì không bao giờ trộn nhầm (sự cố 04/10/2026: state
+   hồ sơ "Nguyễn Hồng Quân" bị Lưu đè vào file hồ sơ "Đầy đủ"). */
+var savedOpenId=null;
 function saveState(){
   if(savingBlocked)return;
   try{
-    localStorage.setItem(SAVE_KEY, JSON.stringify(state));
+    var oid=null;
+    try{ if(typeof prOpen!=='undefined'&&prOpen&&prOpen.id)oid=String(prOpen.id); }catch(e0){}
+    /* prOpen chưa được gán (boot, trước profileBarInit) → giữ nguyên openId đọc từ bản lưu:
+       xóa trắng sẽ mất bằng chứng ghép nếu người dùng tắt tab ngay sau khi mở */
+    if(!oid&&typeof savedOpenId!=='undefined'&&savedOpenId)oid=String(savedOpenId);
+    localStorage.setItem(SAVE_KEY, JSON.stringify({v:1, openId:oid, state:state}));
     if(saveFailed){saveFailed=false;updateSaveStatus();}
   }catch(e){
     if(!saveFailed){saveFailed=true;updateSaveStatus();}
@@ -65,7 +76,7 @@ function migrateState(saved){
      bản cũ quy đổi để DÒNG TIỀN MÔ PHỎNG GIỮ NGUYÊN (yield %/năm → VND/tháng; giá bán tuyệt đối
      tại năm bán → chia lạm phát về giá hiện tại); cấu hình bán sớm chung chuyển thành sellable
      từng BĐS rồi xóa khỏi state. Bản v8 đã có sẵn các trường này — bỏ qua, giữ nguyên số.
-     Thông báo nằm trong migrateState (không chỉ loadState) để MỞ HỒ SƠ FILE cũ cũng thấy hướng dẫn. */
+     Nâng cấp im lặng (04/10/2026: bỏ banner hướng dẫn — người dùng không muốn thông báo migration). */
   if(saved.schemaVersion===undefined||saved.schemaVersion<8){
     result.landPlots=result.landPlots.map(function(p){
       var c=Object.assign({},p);
@@ -80,7 +91,6 @@ function migrateState(saved){
       delete c.rentMode;delete c.rentYield;delete c.price;delete c.priceMode;
       return c;
     });
-    migrationMessages.push('Đã nâng cấp Tab 2 → “Tài sản” (v8): mọi số của BĐS (giá trị, giá thuê, giá bán, chi phí) giờ nhập theo giá hiện tại — số cũ đã được quy đổi tương đương; thêm Năm sở hữu cho BĐS nhận sau này, danh mục chi phí sửa chữa/duy tu và ô “Có thể bán” cho từng BĐS (thay cho cấu hình bán sớm chung). Kết quả mô phỏng của dữ liệu cũ không đổi.');
   }
   delete result.landSellable;
   result.pensionMode='simple';result.lumpsum=false;result.allocPolicy={lumpEnabled:false,lumpAlloc:{}};
@@ -167,22 +177,40 @@ function migrateState(saved){
      lưu growth = tăng thật SAU lạm phát ngầm tới mốc → quy đổi gộp ((1+lạm phát)×(1+growth cũ)−1)
      để ý "tăng thêm ngoài lạm phát" của số cũ được giữ trọn trong nghĩa mới; amount (giá hiện tại)
      giữ nguyên. Mốc tại năm thứ 0 tăng nhanh hơn trước đúng phần lạm phát; mốc năm sau cộng thêm
-     phần trượt giá tới mốc — mở Tab 5 rà lại và sửa mức tăng nếu muốn khác mặc định. */
+     phần trượt giá tới mốc. Quy đổi im lặng (04/10/2026: bỏ banner — người dùng không muốn
+     thông báo migration). */
   if(result.lifePlan&&result.lifePlan.version===2&&Array.isArray(result.lifePlan.rows)){
-    var inflF=1+(finiteNumber(result.infl)?result.infl:5)/100,convG=0;
+    var inflF=1+(finiteNumber(result.infl)?result.infl:5)/100;
     result.lifePlan.rows.forEach(function(r){
-      if(r&&r.income&&finiteNumber(r.income.growth)){r.income.growth=Math.round((inflF*(1+r.income.growth/100)-1)*10000)/100;convG++;}
+      if(r&&r.income&&finiteNumber(r.income.growth)){r.income.growth=Math.round((inflF*(1+r.income.growth/100)-1)*10000)/100;}
     });
     result.lifePlan.version=3;
-    if(convG)migrationMessages.push('Tab 5: "Tăng %/năm" nay là tốc độ tăng danh nghĩa tổng kể từ hôm nay — mốc mới mặc định bằng lạm phát, nhập 0 nếu khoản thu không tăng (vd phí gửi xe theo giá quy định). Các mốc cũ đã được quy đổi gộp lạm phát vào mức tăng để giữ đúng ý tăng thật cũ; hãy mở Tab 5 rà lại từng mốc và sửa nếu muốn.');
   }
-  result.schemaVersion=9;result.seriesV=MODEL_VERSION;
+  result.schemaVersion=12;result.seriesV=MODEL_VERSION;
   /* v9 — Tab 8 Tối ưu đóng BHXH: compareCfg là what-if độc lập (không đụng dòng tiền mô phỏng),
      bản cũ thiếu trường được điền im lặng mặc định — không banner. */
   result.compareCfg=Object.assign(newCompareCfg(),saved.compareCfg&&typeof saved.compareCfg==='object'?saved.compareCfg:{});
   /* Chi phí cố định Tab 4 (không theo lạm phát) — trường optional, bản cũ thiếu được điền rỗng
      im lặng (tiền lệ rentFromYear): hồ sơ cũ không đổi một số mô phỏng nào. */
   if(!Array.isArray(result.fixedMilestones))result.fixedMilestones=[];
+  if(!Array.isArray(result.debts))result.debts=[];
+  if(!Array.isArray(result.debtFloatingRates))result.debtFloatingRates=JSON.parse(JSON.stringify(defaultState.debtFloatingRates));
+  /* Hồ sơ cũ lấy mức trung tâm từ lãi năm đầu đang dùng; không sinh lại đường
+     lãi đã nhập, chỉ thêm tham số cho nút Sinh chuỗi. */
+  var firstDebtRate=result.debtFloatingRates.find(function(r){return r&&r.fromY===0;});
+  result.debtRateGenerator=Object.assign({center:firstDebtRate&&finiteNumber(firstDebtRate.rate)?firstDebtRate.rate:8,swing:2},saved.debtRateGenerator&&typeof saved.debtRateGenerator==='object'?saved.debtRateGenerator:{});
+  result.debts=result.debts.map(function(d){
+    var c=Object.assign({},d);
+    if(c.rateMode===undefined){
+      c.rateMode=c.introMonths>0?'fixed-floating':'fixed';
+      /* v10: mức lãi sau kỳ đầu lưu ở từng khoản. Giữ nguyên kết quả cũ khi kịch bản
+         Tab 6 ở mức mặc định 8%; về sau thay Tab 6 sẽ dịch mức này theo cùng biên độ. */
+      c.floatingSpread=c.rateMode==='fixed-floating'?c.rateAfter-8:0;
+    }
+    if(c.floatingSpread===undefined)c.floatingSpread=0;
+    delete c.kind;delete c.rateAfter;
+    return c;
+  });
   /* F03 — kiểm tra TỪNG chuỗi độc lập: chuỗi hỏng (không phải mảng số hợp lệ) chỉ reset chính nó,
      hai chuỗi tốt giữ nguyên đường đã lưu. Raw gốc được loadState sao dự phòng trước khi sửa. */
   if(typeof result.series!=='object'||!result.series||Array.isArray(result.series))result.series={};
@@ -235,6 +263,13 @@ function loadState(){
   try{
     var raw=localStorage.getItem(SAVE_KEY);if(!raw)return false;
     var saved=JSON.parse(raw);if(!saved||typeof saved!=='object')throw new Error('Bản lưu không hợp lệ');
+    /* Đợt 88 — bản ghi mới gói {v:1, openId, state}: tách vỏ trước, mọi kiểm tra schema/migration
+       bên dưới chạy trên state bên trong. Bản lưu cũ (state trơn) đọc thẳng, savedOpenId rỗng →
+       boot ghép theo meta như trước; lần saveState đầu sẽ nâng lên dạng gói. */
+    if(saved.v===1&&saved.state&&typeof saved.state==='object'&&!Array.isArray(saved.state)){
+      savedOpenId=(typeof saved.openId==='string'&&saved.openId)?saved.openId:null;
+      saved=saved.state;
+    }else savedOpenId=null;
     if(saved.schemaVersion===undefined||saved.schemaVersion<7){
       if(!localStorage.getItem(SAVE_KEY+'_backup_before_v7'))localStorage.setItem(SAVE_KEY+'_backup_before_v7',raw);
     }

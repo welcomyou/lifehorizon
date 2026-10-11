@@ -36,14 +36,14 @@ function renderInvestmentPlan(){
       people.forEach(function(p){var z=pensionStartOf(p.pension);total+=pensionMonthly(z.amount,z.start,z.growth,state.infl,NOW,m);});
       h+='<div class="milestone-income pension-milestone">'+
         '<div><input type="text" value="'+year+'" disabled aria-label="Năm thứ hưu, '+esc(item.person.name)+'" title="Năm thứ = số nguyên năm kể từ mốc gốc, làm tròn xuống — tháng đủ tuổi hưu của '+esc(item.person.name)+' là '+ymToStr(m)+' nên rơi trong năm thứ '+year+'"></div>'+
-        '<div class="cyear" title="Mốc hưu tính theo THÁNG đủ tuổi (Tab 3 · BHXH), không theo đúng tháng kỷ niệm của mốc gốc — nên cùng Năm thứ '+year+' có thể khác năm lịch với dòng thường">'+ymToStr(m)+'</div>'+
+        '<div class="cyear" title="Mốc hưu tính theo THÁNG đủ tuổi (Tab 4 · BHXH), không theo đúng tháng kỷ niệm của mốc gốc — nên cùng Năm thứ '+year+' có thể khác năm lịch với dòng thường">'+ymToStr(m)+'</div>'+
         '<div><input type="text" value="'+esc(item.person.name)+' về hưu" disabled aria-label="Mốc hưu, '+esc(item.person.name)+'"></div>'+
-        '<div><input type="text" class="money" value="'+fmtTr(v.amount)+'/tháng" disabled title="Mức nhập theo giá hiện tại (Tab 3 · BHXH) — '+fmtMoney(v.amount)+' đ/tháng"></div>'+
+        '<div><input type="text" class="money" value="'+fmtTr(v.amount)+'/tháng" disabled title="Mức nhập theo giá hiện tại (Tab 4 · BHXH) — '+fmtMoney(v.amount)+' đ/tháng"></div>'+
         /* Đ27 — ô Tương lai của dòng hưu là div .fsalary KHÔNG viền, giống dòng thường (trước là input disabled có viền);
            span .fsalary-val chỉ để mobile (CSS @media) bọc khung như ô nhập — desktop span inline, hiển thị y hệt chữ trơn */
         '<div class="fsalary" title="Thực nhận dự kiến từ '+ymToStr(m)+': ≈ '+fmtMoney(amount)+' đ/tháng (đã gồm lạm phát và tăng sau hưu) · Tổng hưu cả nhà tại tháng này: '+fmtTr(total)+'/tháng"><span class="fsalary-val">'+fmtTr(amount)+'/tháng</span></div>'+
         '<div><input type="text" value="'+vnNumStr(v.growth)+'" disabled aria-label="Tăng %/năm lương hưu, '+esc(item.person.name)+'"></div>'+
-        '<div class="lockcell" title="Lấy từ Tab 3 · BHXH — chỉ là nhãn nhận biết giai đoạn về hưu, không phải dòng thu nhập; không sửa được ở đây">🔒</div></div>';return;
+        '<div class="lockcell" title="Lấy từ Tab 4 · BHXH — chỉ là nhãn nhận biết giai đoạn về hưu, không phải dòng thu nhập; không sửa được ở đây">🔒</div></div>';return;
     }
     var r=item.row,i=incomeRows.indexOf(r),name='thu nhập '+(i+1);
     var showLabel=r.incomeLabel||(r.label==='Thu nhập & Phân bổ ban đầu'||r.label==='Phân bổ tài sản lần đầu'?'Thu nhập hiện tại':r.label);

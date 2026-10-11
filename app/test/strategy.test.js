@@ -152,7 +152,7 @@ test('strategy: migration converts non-stage plans to the default plan, drops le
   const {c,s}=managed();const old=JSON.parse(JSON.stringify(s));delete old.investmentPlan;old.schemaVersion=4;
   old.allocRetire={mmf:0,tk:15,tp:35,cp:40,gold:10};
   const m=c.migrateState(old);
-  assert.equal(m.investmentPlan.stages.length,1);assert.equal(m.schemaVersion,9); /* v9 = Tab 8 compareCfg */
+  assert.equal(m.investmentPlan.stages.length,1);assert.equal(m.schemaVersion,12); /* v9 = Tab 8 compareCfg */
   assert.equal('allocRetire' in m,false);assert.equal('mode' in m.investmentPlan,false);
   assert.equal(JSON.stringify(m.series),JSON.stringify(old.series));
   const after=c.migrateState(JSON.parse(JSON.stringify(s)));assert.equal(JSON.stringify(after.investmentPlan),JSON.stringify(s.investmentPlan));
@@ -338,7 +338,7 @@ test('income current-price: migrateState converts v1 amounts to current price, v
  near(c.lifeSalary(c.state.lifePlan,NOW0+60),30e6*Math.pow(1.06,5));
  near(c.lifeSalary(c.state.lifePlan,NOW0+72),30e6*Math.pow(1.06,5)*1.113);
  assert.ok(c.migrationMessages.some(x=>x.indexOf('giá hiện tại')>=0));
- assert.ok(c.migrationMessages.some(x=>x.indexOf('Tăng %/năm')>=0));
+ assert.ok(!c.migrationMessages.some(x=>x.indexOf('Tăng %/năm')>=0)); /* 04/10/2026 — bỏ banner migration v3 */
 });
 test('income growth v3: migrateState combines saved v2 growth with inflation so amounts stay untouched',()=>{
  const c=fresh(3);const NOW0=c.NOW;
@@ -354,7 +354,7 @@ test('income growth v3: migrateState combines saved v2 growth with inflation so 
  c.state.lifePlan=m.lifePlan;c.state.infl=m.infl;
  near(c.lifeSalary(c.state.lifePlan,NOW0+12),20e6*1.0608);
  near(c.lifeSalary(c.state.lifePlan,NOW0+36),3e6*Math.pow(1.04,3));   // 4%/năm kể từ gốc, tại năm thứ 3
- assert.ok(c.migrationMessages.some(x=>x.indexOf('Tăng %/năm')>=0));
+ assert.ok(!c.migrationMessages.some(x=>x.indexOf('Tăng %/năm')>=0)); /* 04/10/2026 — bỏ banner migration v3 */
  // Bản v3 lưu rồi phải nguyên trạng khi migrate lại
  const again=JSON.parse(JSON.stringify(m.lifePlan));
  assert.equal(JSON.stringify(c.migrateState(JSON.parse(JSON.stringify({schemaVersion:9,startMonth:NOW0,simYears:3,infl:4,lifePlan:again}))).lifePlan),JSON.stringify(again));
@@ -455,4 +455,34 @@ test('cost-aware: configurable bond exit period and fee postpone an optional sal
   assert.ok(!a[2].strategy.trades.some(t=>t.asset==='tp'&&t.side==='sell'));
   assert.ok(a[3].strategy.trades.some(t=>t.asset==='tp'&&t.side==='sell'&&t.cost===0));
   near(a.reduce((sum,m)=>sum+m.ledger.tpFee,0),0);
+});
+
+/* ===== Đợt 88 — bản lưu trình duyệt gói nguyên tử {v:1, openId, state}: state luôn đi kèm id hồ sơ
+   nó thuộc về, hai tab dùng chung khóa không thể trộn nhầm (sự cố 04/10/2026: state hồ sơ Quân bị
+   Lưu đè vào file hồ sơ "Đầy đủ" vì ghép theo meta rời rạc). ===== */
+function lsStub(){ const m={}; return {getItem:k=>(k in m)?m[k]:null,setItem:(k,v)=>{m[k]=String(v);},removeItem:k=>{delete m[k];}}; }
+test('persist: saveState wraps {v:1, openId, state} stamped with the open profile id',()=>{
+  const c=context(); c.localStorage=lsStub();
+  c.state.mainName='A'; c.prOpen={id:'p-a'};
+  c.saveState();
+  const rec=JSON.parse(c.localStorage.getItem('lifesim_vn_state_v1'));
+  assert.equal(rec.v,1);assert.equal(rec.openId,'p-a');assert.equal(rec.state.mainName,'A');
+});
+test('persist: saveState keeps the boot openId while no profile is applied yet',()=>{
+  const c=context(); c.localStorage=lsStub(); c.savedOpenId='p-old';
+  c.saveState();
+  assert.equal(JSON.parse(c.localStorage.getItem('lifesim_vn_state_v1')).openId,'p-old');
+});
+test('persist: loadState unwraps the atomic record and exposes savedOpenId',()=>{
+  const c=context(); c.localStorage=lsStub();
+  const st=JSON.parse(JSON.stringify(c.state)); st.mainName='B';
+  c.localStorage.setItem('lifesim_vn_state_v1', JSON.stringify({v:1,openId:'p-b',state:st}));
+  assert.equal(c.loadState(),true);
+  assert.equal(c.savedOpenId,'p-b');assert.equal(c.state.mainName,'B');assert.equal(c.state.schemaVersion,12);
+});
+test('persist: loadState reads a legacy raw-state record without openId',()=>{
+  const c=context(); c.localStorage=lsStub();
+  c.localStorage.setItem('lifesim_vn_state_v1', JSON.stringify(JSON.parse(JSON.stringify(c.state))));
+  assert.equal(c.loadState(),true);
+  assert.equal(c.savedOpenId,null);assert.equal(c.state.schemaVersion,12);
 });
