@@ -136,3 +136,32 @@ test('profile: stateSig vẫn nhạy với dữ liệu thật và khớp giữa 
   const roundTrip = JSON.parse(JSON.stringify(s));
   assert.equal(c.stateSig(roundTrip), c.stateSig(s));
 });
+
+/* Đợt 98 — kết quả Kiểm tra rủi ro của engine cũ phải hết hiệu lực qua cơ chế có sẵn:
+   v14 (đợt 96, bản stripPlotForecast lỗi) lưu strategyVersion=14; nâng engine lên 15 thì
+   prRiskRunUsable phải từ chối kết quả cũ và chấp nhận kết quả của phiên bản hiện hành. */
+test('profile: kết quả rủi ro của engine cũ bị đánh dấu cũ, bản hiện hành được chấp nhận', () => {
+  const fs2 = require('node:fs'), path2 = require('node:path'), vm2 = require('node:vm');
+  const c = ctx();
+  const elements = new Map();
+  c.document = { getElementById(id){ if(!elements.has(id)) elements.set(id,{innerHTML:'',textContent:''}); return elements.get(id); } };
+  vm2.runInContext(fs2.readFileSync(path2.join(__dirname,'../ui/profiles.js'),'utf8'), c);
+  c.stateSignature = 'sig-demo';
+  // Kết quả lưu từ v14 (bản lỗi đợt 96) — phải bị từ chối dù sig khớp
+  c.prRiskRun = { at:'2026-10-12T00:00:00Z', modelVersion:c.MODEL_VERSION, strategyVersion:14, sig:c.prSigHash('sig-demo') };
+  assert.equal(c.prRiskRunUsable(), null, 'kết quả v14 phải hết hiệu lực');
+  // Kết quả của engine hiện hành, sig khớp → được chấp nhận
+  c.prRiskRun = { at:'2026-10-12T00:00:00Z', modelVersion:c.MODEL_VERSION, strategyVersion:c.STRATEGY_ENGINE_VERSION, sig:c.prSigHash('sig-demo') };
+  assert.equal(c.prRiskRunUsable(), c.prRiskRun);
+  // Cùng phiên bản nhưng state đã đổi (sig lệch) → vẫn bị từ chối
+  c.prRiskRun = { at:'2026-10-12T00:00:00Z', modelVersion:c.MODEL_VERSION, strategyVersion:c.STRATEGY_ENGINE_VERSION, sig:'khac' };
+  assert.equal(c.prRiskRunUsable(), null);
+  // Kết quả v14 hiển thị kèm cảnh báo "nên chạy lại"; kết quả phiên bản hiện hành thì không
+  const run14 = { at:'2026-10-12T00:00:00Z', modelVersion:c.MODEL_VERSION, strategyVersion:14, sig:c.prSigHash('sig-demo'), n:20, p10:1, p50:2, p90:3, runOutRate:0 };
+  c.prRiskRun = run14;
+  c.prRenderRiskOut();
+  assert.ok(elements.get('riskOut').innerHTML.includes('nên chạy lại'), 'kết quả v14 phải kèm cảnh báo chạy lại');
+  c.prRiskRun = Object.assign({}, run14, { strategyVersion:c.STRATEGY_ENGINE_VERSION });
+  c.prRenderRiskOut();
+  assert.ok(!elements.get('riskOut').innerHTML.includes('nên chạy lại'), 'kết quả phiên bản hiện hành không cảnh báo');
+});

@@ -6,7 +6,7 @@
 var INVESTMENT_KEYS=['tk','tp','cp','gold'];
 var INVESTMENT_NAMES={target:'Giữ tỷ trọng mục tiêu',bucket:'Dự phòng theo số tháng chi',glide:'Đổi tỷ trọng dần'};
 var STRATEGY_VERSION=1;
-var STRATEGY_ENGINE_VERSION=14; // v14: chi duy tu dừng khi BĐS đã bán (kể cả khẩn cấp, gỡ khỏi dự báo); thanh khoản trừ phí quỹ.
+var STRATEGY_ENGINE_VERSION=15; // v15: vá stripPlotForecast (đợt 97) — kết quả rủi ro của v14 lỗi (đợt 96) phải hết hiệu lực.
 // v7 lifePlan is the editable source. Older structures remain only for import compatibility.
 // v3 (đợt 63) — income.growth là TỐC ĐỘ TĂNG DANH NGHĨA TỔNG từ tháng gốc: mặc định bằng lạm phát,
 // 0 = đứng nguyên số nhập mọi năm (thu theo giá quy định). v2 cũ: growth là tăng thật SAU lạm phát
