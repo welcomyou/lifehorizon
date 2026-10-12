@@ -177,12 +177,16 @@ function runSim(withBhxh,opt){
     return out;
   }
   var forecast=investmentForecast(withBhxh),previousStage=null,cpHistory=[1];
-  /* BĐS bán (theo lịch hoặc khẩn cấp) thì gỡ các khoản chi duy tu CÒN LẠI của BĐS đó khỏi dự báo,
-     để dự phòng MMF và kỳ hạn sổ không còn chuẩn bị tiền cho khoản chi không tồn tại. */
+  /* BĐS bán (theo lịch hoặc khẩn cấp) thì gỡ khỏi dự báo CHỈ những khoản chi duy tu của CHÍNH BĐS đó
+     vốn đã nằm trong dự báo ban đầu và bị hủy bởi việc bán: plotExpenseAt đã lọc sẵn chi SAU tháng bán
+     dự kiến (chưa từng cộng vào forecast) nên chỉ gỡ các khoản giữa tháng bán thực tế và tháng bán
+     dự kiến (saleYear trống = mọi chi tương lai đều nằm trong dự báo). Nhờ vậy không xóa nhầm khoản
+     chi của BĐS khác/sự kiện chung trùng tháng. */
   function stripPlotForecast(p,fromMi){
+    var saleMi=p.saleYear==null?Infinity:p.saleYear*12+11-NOW;
     (p.expenses||[]).forEach(function(x){
       var emi=x.y*12+11-NOW;
-      if(emi>fromMi&&emi<count)forecast[emi].eventOut=Math.max(0,forecast[emi].eventOut-(x.amount||0)*Math.pow(1+state.infl/100,emi/12));
+      if(emi>fromMi&&emi<count&&emi<=saleMi)forecast[emi].eventOut=Math.max(0,forecast[emi].eventOut-(x.amount||0)*Math.pow(1+state.infl/100,emi/12));
     });
   }
   var strategyStats={stockSoldInDrawdown:0,proactiveSales:0,reserveShortMonths:0};

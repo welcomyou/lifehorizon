@@ -262,6 +262,44 @@ test('liquid: TP còn trong kỳ miễn phí rút được quy về giá trị r
   near(m.tp,10e6);
   near(m.liquid,9.8e6);
 });
+/* Đợt 97 — stripPlotForecast chỉ được gỡ khoản chi ĐÃ nằm trong dự báo (plotExpenseAt đã lọc sẵn
+   chi sau lịch bán); bán khẩn cấp gỡ đúng phần giữa tháng bán và lịch bán, không đụng chi khác. */
+test('v8 expenses: chi hết hiệu lực của BĐS bán đúng lịch không xóa nhầm chi BĐS khác cùng tháng',()=>{
+  const build=(withExpired)=>{
+    let c=fresh(3),s=c.state;s.rates.tpEarlyFee=2;s.rates.tpMinMonths=24;
+    s.landPlots=[plot({id:'sold',total:1e9,saleYear:2026,expenses:withExpired?[{y:2027,amount:1e8}]:[]}),
+                 plot({id:'kept',total:5e8,sellable:false,expenses:[{y:2027,amount:1e8}]})];
+    assert.equal(c.validateErrors().length,0);
+    const sim=c.runSim(true);
+    return {forecast:c.investmentForecast(true)[23].eventOut,bills:sim.months[11].strategy.futureBills,
+      mmf:sim.months[11].mmf,tp:sim.months[11].tp,exp:sim.months[23].plotExp,fee:sim.months[23].ledger.tpFee,
+      ending:sim.months.at(-1).total};
+  };
+  const control=build(false),observed=build(true);
+  assert.deepEqual(observed,control,'Thêm dòng chi đã hết hiệu lực phải vô hại');
+  near(control.forecast,1e8);
+  near(control.bills,1e8);            // dự phòng MMF vẫn chuẩn bị đủ chi của BĐS giữ lại
+  near(control.ending,14e8);
+});
+test('v8 expenses: bán khẩn cấp vẫn gỡ đúng chi của chính BĐS nằm trước lịch bán dự kiến',()=>{
+  let c=fresh(3),s=c.state;
+  s.landPlots=[plot({total:1e9,saleYear:2028,expenses:[{y:2027,amount:1e8}]})];   // chi 12/2027 < lịch bán 12/2028: có trong dự báo
+  s.milestones=[{y:0,monthly:1e6}];
+  let sim=c.runSim(false);
+  assert.ok(sim.months[0].ledger.propertyProceeds>0);
+  near(sim.months[11].strategy.futureBills,0);       // đã gỡ khỏi dự báo sau bán khẩn cấp
+  near(sim.months[23].plotExp,0);                    // và không còn trừ thực tế
+});
+test('v8 expenses: bán khẩn cấp không gỡ chi nằm sau lịch bán dự kiến của BĐS khác cùng tháng',()=>{
+  let c=fresh(2),s=c.state;
+  s.landPlots=[plot({id:'sold',total:1e9,saleYear:2026,expenses:[{y:2027,amount:1e8}]}),   // chi sau lịch bán: chưa từng nằm trong dự báo
+               plot({id:'kept',total:5e8,sellable:false,expenses:[{y:2027,amount:1e8}]})];
+  s.milestones=[{y:0,monthly:1e6}];
+  let sim=c.runSim(false);
+  assert.ok(sim.months[0].ledger.propertyProceeds>0);   // bán khẩn cấp ngay tháng đầu
+  near(sim.months[11].strategy.futureBills,1e8);        // dự báo giữ nguyên chi của BĐS giữ lại
+  near(sim.months[23].plotExp,1e8);                     // BĐS giữ lại vẫn trả đủ, không bị xóa nhầm
+});
 test('v8 early sale: chỉ BĐS đánh dấu Có thể bán bị bán — BĐS nhỏ hơn nhưng khóa vẫn giữ nguyên',()=>{
   let c=fresh(1);
   c.state.landPlots=[plot({id:'keep',total:200e6,sellable:false}),plot({id:'sell',total:1e9,sellable:true})];
